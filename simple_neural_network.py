@@ -42,6 +42,7 @@ args = vars(ap.parse_args())
 
 data_files = args['dataset'].split(',')
 
+#Load in dataset parameters into variables and then combine into a numpy array
 trig_comb = []
 np.asarray(trig_comb)
 h1 = h5py.File(args['dataset'].split(',')[0], 'r')
@@ -53,8 +54,8 @@ time = np.asarray(h1['H1/time'][:]).reshape((h1['H1/time'].shape[0],1))
 ratio_chirp = np.asarray(h1['H1/ratio_chirp'][:]).reshape((h1['H1/ratio_chirp'].shape[0],1))
 delT = np.asarray(h1['H1/delT'][:]).reshape((h1['H1/delT'].shape[0],1))
 delta_chirp = np.asarray(h1['H1/delta_chirp'][:]).reshape((h1['H1/delta_chirp'].shape[0],1))
-
 trig_comb = np.hstack((marg_l, count, maxnewsnr, maxsnr, ratio_chirp, delT))
+
 #load CBC/noise triggers and identify labels
 for fi in data_files:
     h1 = h5py.File(fi, 'r')
@@ -105,27 +106,23 @@ np.asarray(inj_weights_pre)
 dist_inj_mean = (eff_dist_inj**2).mean()
 for idx in enumerate(delta_chirp_inj):
     idx = idx[0]
-     #   delta_chirp_inj_w.append(delta_chirp_inj[idx][0]*((eff_dist_inj[idx][0]**2)/(eff_dist_inj**2).mean()))
     inj_weights_pre.append((eff_dist_inj[idx][0]**2)/dist_inj_mean)
-    #delta_chirp_inj_w = np.asarray(delta_chirp_inj_w).reshape((h1['H1/delta_chirp_inj'].shape[0],1))
 
 inj_weights = np.asarray(inj_weights_pre).reshape((delta_chirp_inj.shape[0],1))
 
-#combining trigs and inj into one matrix
-#inj_comb = np.hstack((marg_l_inj_w, count_inj_w, maxnewsnr_inj_w, maxsnr_inj_w, ratio_chirp_inj_w, delT_inj_w))
+#Combining injection parameters into a numpy array
 inj_comb = np.hstack((marg_l_inj, count_inj, maxnewsnr_inj, maxsnr_inj, ratio_chirp_inj, delT_inj))
 
+#Randomizing the order of the background triggers
 indices_trig = np.random.permutation(trig_comb.shape[0])
 
-#The factor of 10 refers to ten times as much background.
-trig_train_idx, trig_test_idx = indices_trig[:int(trig_comb.shape[0]*.8)], indices_trig[int(trig_comb.shape[0]*.8):int(trig_comb.shape[0])]
+#Seperate data into training and testing
+trig_train_idx, trig_test_idx = indices_trig[:int(trig_comb.shape[0]*.7)], indices_trig[int(trig_comb.shape[0]*.7):int(trig_comb.shape[0])]
 trig_train, trig_test = trig_comb[trig_train_idx,:], trig_comb[trig_test_idx,:]
-
 indices_inj = np.random.permutation(inj_comb.shape[0])
-inj_train_idx, inj_test_idx = indices_inj[:int(inj_comb.shape[0]*.8)], indices_inj[int(inj_comb.shape[0]*.8):]
+inj_train_idx, inj_test_idx = indices_inj[:int(inj_comb.shape[0]*.7)], indices_inj[int(inj_comb.shape[0]*.7):]
 inj_train_weight, inj_test_weight = inj_weights[inj_train_idx,:], inj_weights[inj_test_idx,:]
 inj_train, inj_test = inj_comb[inj_train_idx,:], inj_comb[inj_test_idx,:]
-
 comb_all = np.vstack((trig_comb, inj_comb))
 train_data = np.vstack((trig_train, inj_train))
 test_data = np.vstack((trig_test, inj_test))
@@ -133,43 +130,20 @@ test_data = np.vstack((trig_test, inj_test))
 
 #making labels (zero is noise, one is injection)
 c_zero = np.zeros((trig_comb.shape[0],1))
-c_z_train = c_zero[:int(trig_comb.shape[0]*.8)]
-c_z_test = c_zero[int(trig_comb.shape[0]*.8):int(trig_comb.shape[0])]
+c_z_train = c_zero[:int(trig_comb.shape[0]*.7)]
+c_z_test = c_zero[int(trig_comb.shape[0]*.7):int(trig_comb.shape[0])]
 c_ones = np.ones((int(inj_comb.shape[0]),1))
-c_o_train = c_ones[:int(inj_comb.shape[0]*.8)]
-c_o_test = c_ones[int(inj_comb.shape[0]*.8):int(inj_comb.shape[0])]
-#c_ones = np.ones((int(inj_train_snrthresh.shape[0]+inj_test.shape[0]),1))
-#c_o_train = c_ones[:int(inj_train_snrthresh.shape[0])]
-#c_o_test = c_ones[int(inj_train_snrthresh.shape[0]):int(inj_train_snrthresh.shape[0]+inj_test.shape[0])]
-
+c_o_train = c_ones[:int(inj_comb.shape[0]*.7)]
+c_o_test = c_ones[int(inj_comb.shape[0]*.7):int(inj_comb.shape[0])]
 lab_train = np.vstack((c_z_train,c_o_train))
 lab_test = np.vstack((c_z_test,c_o_test))
 labels_all = np.vstack((c_zero,c_ones))
 
 # define the architecture of the network (sigmoid nodes)
-#with tf.device('/gpu:0'):
 model = Sequential()
 early_stopping = EarlyStopping(monitor='val_loss', patience=2)
-#model.add(Dense(1, input_dim=trig_comb.shape[1],activation='linear'))
-model.add(Dense(1, input_dim=1,activation='linear'))
-#model.add(Dense(2,activation='sigmoid'))
-#model.add(Dense(1,activation='linear'))
-
-#model.add(Dropout(0.2))
-#model.add(Dense(3, activation='sigmoid'))
-#model.add(Dropout(0.2))
-#model.add(Dense(3, activation='sigmoid'))
-#model.add(Dropout(0.2))
-#model.add(Dense(3, activation='sigmoid'))
-#model.add(Dropout(0.2))
-#model.add(Dense(3, activation='relu'))
-#model.add(Dropout(0.2))
-#model.add(Dense(3, activation='sigmoid'))
-#model.add(Dropout(0.2))
-#model.add(Dense(3, activation='sigmoid'))
-#model.add(Dropout(0.2))
-#model.add(Dense(3, activation='relu'))
-#model.add(Dropout(0.2))
+model.add(Dense(1, input_dim=trig_comb.shape[1],activation='relu'))
+#model.add(Dense(1, input_dim=1,activation='linear'))
 
 #model.add(Dense(300, activation='sigmoid'))
 #model.add(Dropout(0.2))
@@ -181,36 +155,36 @@ model.add(Dense(1, input_dim=1,activation='linear'))
 #model.add(Dropout(0.2))
 #model.add(Dense(200, activation='sigmoid'))
 
-#model.add(Dense(1, activation='sigmoid'))
+model.add(Dense(1, activation='sigmoid'))
 
-#train the model using SGD
-#with tf.device('/gpu:0'): binary_crossentropy
+#Compiling model
 print("[INFO] compiling model...")
 sgd = SGD(lr=0.01)
-model.compile(loss="kld", optimizer='rmsprop',
+model.compile(loss="binary_crossentropy", optimizer='sgd',
 	metrics=["accuracy"], class_mode='binary')
 
 #Creating sample weights vector
 trig_weights = np.zeros((trig_comb.shape[0],1))
 trig_weights.fill(1/((trig_comb.shape[0])/(inj_comb.shape[0])))
-trig_w_train = trig_weights[:trig_comb.shape[0]*.8] 
-trig_w_test = trig_weights[trig_comb.shape[0]*.8:]
+trig_w_train = trig_weights[:trig_comb.shape[0]*.7] 
+trig_w_test = trig_weights[trig_comb.shape[0]*.7:]
 train_weights = np.vstack((trig_w_train,inj_train_weight)).flatten()
 
-#model.fit(train_data, lab_train, nb_epoch=2, batch_size=32, sample_weight=train_weights, shuffle=True)
-model.fit(train_data[:,2], lab_train, nb_epoch=1, batch_size=32, shuffle=True, show_accuracy=True)
+model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
 
 # show the accuracy on the testing set
 print("[INFO] evaluating on testing set...")
-#(loss, accuracy) = model.evaluate(test_data, lab_test,
-(loss, accuracy) = model.evaluate(test_data[:,2], lab_test,
+(loss, accuracy) = model.evaluate(test_data, lab_test,
 	batch_size=32, verbose=1)
 print("[INFO] loss={:.4f}, accuracy: {:.4f}%".format(loss,
 	accuracy * 100))
-#res_pre = model.predict(test_data)
-res_pre = model.predict(test_data[:,2])
+#Saving prediction probabilities to a variable
+res_pre = model.predict(test_data)
 
+#Printing summary of model parameters
 model.summary()
+
+#Saving model to hdf file for later use
 model.save('nn_model.hdf')
 
 #####################
@@ -219,8 +193,7 @@ model.save('nn_model.hdf')
 
 #Sort trig and inj test features into same order as NN score vector will be
 n_noise = len(trig_test)
-#pred_prob = model.predict_proba(test_data).T[0]
-pred_prob = model.predict_proba(test_data[:,2], batch_size=32).T[0]
+pred_prob = model.predict_proba(test_data, batch_size=32).T[0]
 prob_sort_noise = pred_prob[pred_prob[0:n_noise].argsort()][::-1]
 prob_sort_inj = pred_prob[n_noise:][pred_prob[n_noise:].argsort()][::-1]
 prob_sort_injWeight = inj_test_weight.T[0][pred_prob[n_noise:].argsort()][::-1]
@@ -229,14 +202,43 @@ prob_sort_injNewsnr = inj_test[:,2][pred_prob[n_noise:].argsort()][::-1]
 
 newsnr_sort_noiseNewsnr = trig_test[:,2][trig_test[:,2][0:].argsort()][::-1]
 newsnr_sort_injNewsnr = inj_test[:,2][inj_test[:,2][0:].argsort()][::-1]
-#newsnr_sort_injWeight = inj_test_weight.T[0][test_data[n_noise+1:].argsort()][::-1]
 newsnr_sort_injWeight = inj_test_weight.T[0][inj_test[:,2][0:].argsort()][::-1]
 
-#pred_class = model.predict_classes(test_data)
-pred_class = model.predict_classes(test_data[:,2])
+pred_class = model.predict_classes(test_data)
 class_sort = pred_class[pred_prob[:].argsort()][::-1]
 
 orig_test_labels = lab_test[pred_prob[:].argsort()][::-1]
+
+
+#Function to calculate ROC values
+#def ROC(n_noise, weight, inj_param, noise_param):
+
+#    ROC_value = 0
+#    FAP = []
+#    np.array(FAP)
+#    ROC_sum = []
+#    np.array(ROC_sum)
+
+#    for idx in range(n_noise):
+        #Calculate false alarm probability value
+#        FAP.append((float(idx+1))/n_noise)
+        
+        #Compute sum
+#        ROC_value = weight[inj_param >= noise_param[idx]].sum()
+        
+        #Append
+#        ROC_sum = np.append(ROC_sum, ROC_value)
+
+        #Normalize ROC y axis
+#        ROC_sum = np.asarray(ROC_sum)
+#        ROC_sum *= (1.0/ROC_sum.max())
+
+                
+#    return ROC_sum, FAP
+
+#Calculate the ROC values
+#ROC_w_sum, FAP = ROC(n_noise, prob_sort_injWeight, prob_sort_inj, prob_sort_noise)
+#ROC_newsnr_sum, FAP = ROC(n_noise, newsnr_sort_injWeight, newsnr_sort_injNewsnr, newsnr_sort_noiseNewsnr)
 
 #Create numpy arrays for FAP and ROC y-axis sums
 FAP = []
@@ -381,8 +383,6 @@ with h5py.File('nn_data.hdf', 'w') as hf:
     hf.create_dataset('FAP', data=FAP)
     hf.create_dataset('ROC_w_sum', data=ROC_w_sum)
     hf.create_dataset('pred_prob', data=pred_prob)
-    #hf.create_dataset('test_data', data=test_data)
-    #hf.create_dataset('train_data', data=train_data)
-    hf.create_dataset('test_data', data=test_data[:,2])
-    hf.create_dataset('train_data', data=train_data[:,2])
-    hf.create_dataset('ROC_newsnr_sum', data=ROC_newsnr)
+    hf.create_dataset('test_data', data=test_data)
+    hf.create_dataset('train_data', data=train_data)
+    hf.create_dataset('ROC_newsnr_sum', data=ROC_newsnr_sum)
