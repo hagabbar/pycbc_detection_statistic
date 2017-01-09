@@ -1,0 +1,114 @@
+Using TensorFlow backend.
+I tensorflow/stream_executor/dso_loader.cc:111] successfully opened CUDA library libcublas.so locally
+I tensorflow/stream_executor/dso_loader.cc:111] successfully opened CUDA library libcudnn.so locally
+I tensorflow/stream_executor/dso_loader.cc:111] successfully opened CUDA library libcufft.so locally
+I tensorflow/stream_executor/dso_loader.cc:111] successfully opened CUDA library libcuda.so.1 locally
+I tensorflow/stream_executor/dso_loader.cc:111] successfully opened CUDA library libcurand.so locally
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:951] Found device 0 with properties: 
+name: Tesla P100-SXM2-16GB
+major: 6 minor: 0 memoryClockRate (GHz) 1.4805
+pciBusID 0000:06:00.0
+Total memory: 15.90GiB
+Free memory: 15.62GiB
+W tensorflow/stream_executor/cuda/cuda_driver.cc:572] creating context when one is currently active; existing: 0x37e00d0
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:951] Found device 1 with properties: 
+name: Tesla P100-SXM2-16GB
+major: 6 minor: 0 memoryClockRate (GHz) 1.4805
+pciBusID 0000:07:00.0
+Total memory: 15.90GiB
+Free memory: 15.62GiB
+W tensorflow/stream_executor/cuda/cuda_driver.cc:572] creating context when one is currently active; existing: 0x3e97c80
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:951] Found device 2 with properties: 
+name: Tesla P100-SXM2-16GB
+major: 6 minor: 0 memoryClockRate (GHz) 1.4805
+pciBusID 0000:0a:00.0
+Total memory: 15.90GiB
+Free memory: 15.62GiB
+W tensorflow/stream_executor/cuda/cuda_driver.cc:572] creating context when one is currently active; existing: 0x45531c0
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:951] Found device 3 with properties: 
+name: Tesla P100-SXM2-16GB
+major: 6 minor: 0 memoryClockRate (GHz) 1.4805
+pciBusID 0000:0b:00.0
+Total memory: 15.90GiB
+Free memory: 15.62GiB
+W tensorflow/stream_executor/cuda/cuda_driver.cc:572] creating context when one is currently active; existing: 0x4c125f0
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:951] Found device 4 with properties: 
+name: Tesla P100-SXM2-16GB
+major: 6 minor: 0 memoryClockRate (GHz) 1.4805
+pciBusID 0000:85:00.0
+Total memory: 15.90GiB
+Free memory: 15.62GiB
+W tensorflow/stream_executor/cuda/cuda_driver.cc:572] creating context when one is currently active; existing: 0x52d5930
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:951] Found device 5 with properties: 
+name: Tesla P100-SXM2-16GB
+major: 6 minor: 0 memoryClockRate (GHz) 1.4805
+pciBusID 0000:86:00.0
+Total memory: 15.90GiB
+Free memory: 15.62GiB
+W tensorflow/stream_executor/cuda/cuda_driver.cc:572] creating context when one is currently active; existing: 0x599cca0
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:951] Found device 6 with properties: 
+name: Tesla P100-SXM2-16GB
+major: 6 minor: 0 memoryClockRate (GHz) 1.4805
+pciBusID 0000:89:00.0
+Total memory: 15.90GiB
+Free memory: 15.62GiB
+W tensorflow/stream_executor/cuda/cuda_driver.cc:572] creating context when one is currently active; existing: 0x6067f20
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:951] Found device 7 with properties: 
+name: Tesla P100-SXM2-16GB
+major: 6 minor: 0 memoryClockRate (GHz) 1.4805
+pciBusID 0000:8a:00.0
+Total memory: 15.90GiB
+Free memory: 15.62GiB
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 0 to device ordinal 5
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 0 to device ordinal 6
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 0 to device ordinal 7
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 1 to device ordinal 4
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 1 to device ordinal 6
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 1 to device ordinal 7
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 2 to device ordinal 4
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 2 to device ordinal 5
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 2 to device ordinal 7
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 3 to device ordinal 4
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 3 to device ordinal 5
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 3 to device ordinal 6
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 4 to device ordinal 1
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 4 to device ordinal 2
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 4 to device ordinal 3
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 5 to device ordinal 0
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 5 to device ordinal 2
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 5 to device ordinal 3
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 6 to device ordinal 0
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 6 to device ordinal 1
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 6 to device ordinal 3
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 7 to device ordinal 0
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 7 to device ordinal 1
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:855] cannot enable peer access from device ordinal 7 to device ordinal 2
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:972] DMA: 0 1 2 3 4 5 6 7 
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] 0:   Y Y Y Y Y N N N 
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] 1:   Y Y Y Y N Y N N 
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] 2:   Y Y Y Y N N Y N 
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] 3:   Y Y Y Y N N N Y 
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] 4:   Y N N N Y Y Y Y 
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] 5:   N Y N N Y Y Y Y 
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] 6:   N N Y N Y Y Y Y 
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:982] 7:   N N N Y Y Y Y Y 
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:0) -> (device: 0, name: Tesla P100-SXM2-16GB, pci bus id: 0000:06:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:1) -> (device: 1, name: Tesla P100-SXM2-16GB, pci bus id: 0000:07:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:2) -> (device: 2, name: Tesla P100-SXM2-16GB, pci bus id: 0000:0a:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:3) -> (device: 3, name: Tesla P100-SXM2-16GB, pci bus id: 0000:0b:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:4) -> (device: 4, name: Tesla P100-SXM2-16GB, pci bus id: 0000:85:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:5) -> (device: 5, name: Tesla P100-SXM2-16GB, pci bus id: 0000:86:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:6) -> (device: 6, name: Tesla P100-SXM2-16GB, pci bus id: 0000:89:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:7) -> (device: 7, name: Tesla P100-SXM2-16GB, pci bus id: 0000:8a:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:0) -> (device: 0, name: Tesla P100-SXM2-16GB, pci bus id: 0000:06:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:1) -> (device: 1, name: Tesla P100-SXM2-16GB, pci bus id: 0000:07:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:2) -> (device: 2, name: Tesla P100-SXM2-16GB, pci bus id: 0000:0a:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:3) -> (device: 3, name: Tesla P100-SXM2-16GB, pci bus id: 0000:0b:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:4) -> (device: 4, name: Tesla P100-SXM2-16GB, pci bus id: 0000:85:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:5) -> (device: 5, name: Tesla P100-SXM2-16GB, pci bus id: 0000:86:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:6) -> (device: 6, name: Tesla P100-SXM2-16GB, pci bus id: 0000:89:00.0)
+I tensorflow/core/common_runtime/gpu/gpu_device.cc:1041] Creating TensorFlow device (/gpu:7) -> (device: 7, name: Tesla P100-SXM2-16GB, pci bus id: 0000:8a:00.0)
+simple_neural_network.py:176: VisibleDeprecationWarning: using a non-integer number instead of an integer will result in an error in the future
+  trig_w_train = trig_weights[:trig_comb.shape[0]*.8]
+simple_neural_network.py:177: VisibleDeprecationWarning: using a non-integer number instead of an integer will result in an error in the future
+  trig_w_test = trig_weights[trig_comb.shape[0]*.8:]
