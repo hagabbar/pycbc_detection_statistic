@@ -11,7 +11,7 @@ from keras.layers import LSTM, Dense
 import numpy as np
 import h5py
 from keras.models import Sequential
-from keras.layers import Dense, Activation, Dropout
+from keras.layers import Dense, Activation, Dropout, ActivityRegularization
 from keras.optimizers import SGD
 import sys
 import os
@@ -38,9 +38,12 @@ now = datetime.datetime.now()
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--dataset", required=True,
 	help="path to input dataset")
+ap.add_argument("-o", "--output_dir", required=True,
+        help="path to output directory")
 args = vars(ap.parse_args())
 
 data_files = args['dataset'].split(',')
+out_dir = args['output_dir']
 
 #Load in dataset parameters into variables and then combine into a numpy array
 trig_comb = []
@@ -54,6 +57,7 @@ time = np.asarray(h1['H1/time'][:]).reshape((h1['H1/time'].shape[0],1))
 ratio_chirp = np.asarray(h1['H1/ratio_chirp'][:]).reshape((h1['H1/ratio_chirp'].shape[0],1))
 delT = np.asarray(h1['H1/delT'][:]).reshape((h1['H1/delT'].shape[0],1))
 delta_chirp = np.asarray(h1['H1/delta_chirp'][:]).reshape((h1['H1/delta_chirp'].shape[0],1))
+
 trig_comb = np.hstack((marg_l, count, maxnewsnr, maxsnr, ratio_chirp, delT))
 
 #load CBC/noise triggers and identify labels
@@ -90,16 +94,6 @@ for fi in data_files:
         eff_dist_inj_new = np.asarray(h1['H1/eff_dist_inj'][:]).reshape((h1['H1/eff_dist_inj'].shape[0],1))
         eff_dist_inj = np.vstack((eff_dist_inj, eff_dist_inj_new))
 
-    #Applying weights to injections
-    marg_l_inj_w = []
-    count_inj_w = []
-    maxnewsnr_inj_w = []
-    maxsnr_inj_w = []
-    time_inj_w = []
-    eff_dist_inj_w = []
-    ratio_chirp_inj_w = []
-    delT_inj_w = []
-    delta_chirp_inj_w = []
 
 inj_weights_pre = []
 np.asarray(inj_weights_pre)
@@ -110,8 +104,29 @@ for idx in enumerate(delta_chirp_inj):
 
 inj_weights = np.asarray(inj_weights_pre).reshape((delta_chirp_inj.shape[0],1))
 
-#Combining injection parameters into a numpy array
+#Retaining pre-normalized feature values for plots
 inj_comb = np.hstack((marg_l_inj, count_inj, maxnewsnr_inj, maxsnr_inj, ratio_chirp_inj, delT_inj))
+comb_all = np.vstack((trig_comb, inj_comb))
+indices_trig = np.random.permutation(trig_comb.shape[0])
+trig_train_idx, trig_test_idx = indices_trig[:int(trig_comb.shape[0]*.7)], indices_trig[int(trig_comb.shape[0]*.7):int(trig_comb.shape[0])]
+trig_train_p, trig_test_p = trig_comb[trig_train_idx,:], trig_comb[trig_test_idx,:]
+indices_inj = np.random.permutation(inj_comb.shape[0])
+inj_train_idx, inj_test_idx = indices_inj[:int(inj_comb.shape[0]*.7)], indices_inj[int(inj_comb.shape[0]*.7):]
+inj_train_p, inj_test_p = inj_comb[inj_train_idx,:], inj_comb[inj_test_idx,:]
+train_data_p = np.vstack((trig_train_p, inj_train_p))
+test_data_p = np.vstack((trig_test_p, inj_test_p))
+
+
+#Normalizing
+marg_l = ((comb_all[:,0] - comb_all[:,0].mean())/comb_all[:,0].max()).reshape((comb_all.shape[0],1))
+count = ((comb_all[:,1] - comb_all[:,1].mean())/comb_all[:,1].max()).reshape((comb_all.shape[0],1))
+maxnewsnr = ((comb_all[:,2] - comb_all[:,2].mean())/comb_all[:,2].max()).reshape((comb_all.shape[0],1))
+maxsnr = ((comb_all[:,3] - comb_all[:,3].mean())/comb_all[:,3].max()).reshape((comb_all.shape[0],1))
+ratio_chirp = ((comb_all[:,4] - comb_all[:,4].mean())/comb_all[:,4].max()).reshape((comb_all.shape[0],1))
+delT = ((comb_all[:,5] - comb_all[:,5].mean())/comb_all[:,5].max()).reshape((comb_all.shape[0],1))
+trig_comb = np.hstack((marg_l[0:trig_comb.shape[0]],count[0:trig_comb.shape[0]],maxnewsnr[0:trig_comb.shape[0]],maxsnr[0:trig_comb.shape[0]],ratio_chirp[0:trig_comb.shape[0]],delT[0:trig_comb.shape[0]]))
+inj_comb = np.hstack((marg_l[trig_comb.shape[0]:],count[trig_comb.shape[0]:],maxnewsnr[trig_comb.shape[0]:],maxsnr[trig_comb.shape[0]:],ratio_chirp[trig_comb.shape[0]:],delT[trig_comb.shape[0]:]))
+comb_all = np.vstack((trig_comb, inj_comb))
 
 #Randomizing the order of the background triggers
 indices_trig = np.random.permutation(trig_comb.shape[0])
@@ -123,10 +138,10 @@ indices_inj = np.random.permutation(inj_comb.shape[0])
 inj_train_idx, inj_test_idx = indices_inj[:int(inj_comb.shape[0]*.7)], indices_inj[int(inj_comb.shape[0]*.7):]
 inj_train_weight, inj_test_weight = inj_weights[inj_train_idx,:], inj_weights[inj_test_idx,:]
 inj_train, inj_test = inj_comb[inj_train_idx,:], inj_comb[inj_test_idx,:]
-comb_all = np.vstack((trig_comb, inj_comb))
 train_data = np.vstack((trig_train, inj_train))
 test_data = np.vstack((trig_test, inj_test))
-
+train_data = train_data
+test_data = test_data
 
 #making labels (zero is noise, one is injection)
 c_zero = np.zeros((trig_comb.shape[0],1))
@@ -142,35 +157,43 @@ labels_all = np.vstack((c_zero,c_ones))
 # define the architecture of the network (sigmoid nodes)
 model = Sequential()
 early_stopping = EarlyStopping(monitor='val_loss', patience=2)
-model.add(Dense(1, input_dim=trig_comb.shape[1],activation='relu'))
-#model.add(Dense(1, input_dim=1,activation='linear'))
+#model.add(Dense(200, input_dim=trig_comb.shape[1],activation='relu'))
+model.add(Dense(10, init='normal', input_dim=6, activation='relu'))
+model.add(Dense(6, init='normal', activation='relu'))
+model.add(Dense(6, init='normal', activation='relu'))
+#model.add(Dense(3, activation='relu'))
+#model.add(Dropout(0.2))
+#model.add(Dense(3, activation='relu'))
 
-#model.add(Dense(300, activation='sigmoid'))
-#model.add(Dropout(0.2))
-#model.add(Dense(500, activation='sigmoid'))
-#model.add(Dropout(0.2))
-#model.add(Dense(700, activation='sigmoid'))
-#model.add(Dropout(0.2))
-#model.add(Dense(500, activation='sigmoid'))
-#model.add(Dropout(0.2))
-#model.add(Dense(200, activation='sigmoid'))
 
-model.add(Dense(1, activation='sigmoid'))
+#model.add(Dense(300, activation='relu'))
+#model.add(Dropout(0.2))
+#model.add(Dense(500, activation='relu'))
+#model.add(Dropout(0.2))
+#model.add(Dense(700, activation='relu'))
+#model.add(Dropout(0.2))
+#model.add(Dense(500, activation='relu'))
+#model.add(Dropout(0.2))
+#model.add(Dense(200, activation='relu'))
+
+model.add(Dense(1, init='normal', activation='sigmoid'))
 
 #Compiling model
 print("[INFO] compiling model...")
-sgd = SGD(lr=0.01)
-model.compile(loss="binary_crossentropy", optimizer='sgd',
+sgd = SGD(lr=0.05)
+model.compile(loss="binary_crossentropy", optimizer='adam',
 	metrics=["accuracy"], class_mode='binary')
 
 #Creating sample weights vector
 trig_weights = np.zeros((trig_comb.shape[0],1))
 trig_weights.fill(1/((trig_comb.shape[0])/(inj_comb.shape[0])))
-trig_w_train = trig_weights[:trig_comb.shape[0]*.7] 
-trig_w_test = trig_weights[trig_comb.shape[0]*.7:]
+trig_w_train = trig_weights[:int(trig_comb.shape[0]*.7)]
+trig_w_test = trig_weights[int(trig_comb.shape[0]*.7):]
 train_weights = np.vstack((trig_w_train,inj_train_weight)).flatten()
 
-model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
+#model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
+hist = model.fit(train_data, lab_train, nb_epoch=500, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
+print(hist.history)
 
 # show the accuracy on the testing set
 print("[INFO] evaluating on testing set...")
@@ -184,8 +207,6 @@ res_pre = model.predict(test_data)
 #Printing summary of model parameters
 model.summary()
 
-#Saving model to hdf file for later use
-model.save('nn_model.hdf')
 
 #####################
 #Computing ROC Curve#
@@ -211,30 +232,30 @@ orig_test_labels = lab_test[pred_prob[:].argsort()][::-1]
 
 
 #Function to calculate ROC values
-#def ROC(n_noise, weight, inj_param, noise_param):
+def ROC(n_noise, weight, inj_param, noise_param):
 
-#    ROC_value = 0
-#    FAP = []
-#    np.array(FAP)
-#    ROC_sum = []
-#    np.array(ROC_sum)
+    ROC_value = 0
+    FAP = []
+    np.array(FAP)
+    ROC_sum = []
+    np.array(ROC_sum)
 
-#    for idx in range(n_noise):
+    for idx in range(n_noise):
         #Calculate false alarm probability value
-#        FAP.append((float(idx+1))/n_noise)
+        FAP.append((float(idx+1))/n_noise)
         
         #Compute sum
-#        ROC_value = weight[inj_param >= noise_param[idx]].sum()
+        ROC_value = weight[inj_param >= noise_param[idx]].sum()
         
         #Append
-#        ROC_sum = np.append(ROC_sum, ROC_value)
+        ROC_sum = np.append(ROC_sum, ROC_value)
 
         #Normalize ROC y axis
-#        ROC_sum = np.asarray(ROC_sum)
-#        ROC_sum *= (1.0/ROC_sum.max())
+        ROC_sum = np.asarray(ROC_sum)
+        ROC_sum *= (1.0/ROC_sum.max())
 
                 
-#    return ROC_sum, FAP
+    return ROC_sum, FAP
 
 #Calculate the ROC values
 #ROC_w_sum, FAP = ROC(n_noise, prob_sort_injWeight, prob_sort_inj, prob_sort_noise)
@@ -273,8 +294,12 @@ ROC_newsnr_sum = np.asarray(ROC_newsnr_sum)
 ROC_newsnr_sum *= (1.0/ROC_newsnr_sum.max())
 
 #Make Plots
-os.makedirs('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s' % now)
-os.makedirs('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/colored_plots' % now)
+os.makedirs('%s/run_%s' % (out_dir,now))
+os.makedirs('%s/run_%s/colored_plots' % (out_dir,now))
+
+#Saving model to hdf file for later use
+model.save('%s/run_%s/nn_model.hdf' % (out_dir,now))
+np.save('%s/run_%s/hist.npy' % (out_dir,now), hist.history)
 
 #Make ROC Curve
 pl.plot(FAP,ROC_w_sum,label='NN Score')
@@ -284,98 +309,122 @@ pl.title('ROC Curve')
 pl.xlabel('False Alarm Probability')
 pl.ylabel('Weighted Sum')
 pl.xscale('log')
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/ROC_curve.png' % now)
+pl.savefig('%s/run_%s/ROC_curve.png' % (out_dir,now))
 pl.close()
 
-#Make Marginal liklihood vs. score plot
-pl.scatter(pred_prob,test_data[:,0])
-pl.title('Marginal Likelihood vs. Score')
-pl.xlabel('Score')
-pl.ylabel('Marginal Likelihood')
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/marg_l_vs_score.png' % now)
+#Make score vs. marginal likelihood plot
+pl.scatter(test_data_p[0:len(trig_test),0],pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,0],pred_prob[len(trig_test):],label='injection')
+pl.legend()
+pl.title('Score vs. Marginal Likelihood')
+pl.ylabel('Score')
+pl.xlabel('Marginal Likelihood')
+pl.savefig('%s/run_%s/score_vs_marg_l.png' % (out_dir,now))
 pl.close()
 
-#Make Count vs score plot
-pl.scatter(pred_prob,test_data[:,1])
-pl.title('Count vs. Score')
-pl.xlabel('Score')
-pl.ylabel('Count')
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/count_vs_score.png' % now)
+#Make score vs. count plot
+pl.scatter(test_data_p[0:len(trig_test),1],pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,1],pred_prob[len(trig_test):],label='injection')
+pl.legend()
+pl.title('Score vs. Count')
+pl.ylabel('Score')
+pl.xlabel('Count')
+pl.savefig('%s/run_%s/score_vs_count.png' % (out_dir,now))
 pl.close()
 
-#Make maxnewsnr vs score plot
-pl.scatter(pred_prob,test_data[:,2])
-pl.title('Max New SNR vs. Score')
-pl.xlabel('Score')
-pl.ylabel('Max New SNR')
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/maxnewsnr_vs_score.png' % now)
+#Make score vs maxnewsnr plot
+pl.scatter(test_data_p[0:len(trig_test),2],pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,2],pred_prob[len(trig_test):],label='injection')
+pl.legend()
+pl.title('Score vs. Max New SNR')
+pl.ylabel('Score')
+pl.xlabel('Max New SNR')
+pl.savefig('%s/run_%s/score_vs_maxnewsnr.png' % (out_dir,now))
 pl.close()
 
-#Make maxsnr vs score plot
-pl.scatter(pred_prob,test_data[:,3])
-pl.title('Maximum SNR vs. Score')
-pl.xlabel('Score')
-pl.ylabel('Maximum SNR')
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/maxsnr_vs_score.png' % now)
+#Make score vs maxsnr plot
+pl.scatter(test_data_p[0:len(trig_test),3],pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,3],pred_prob[len(trig_test):],label='injection')
+pl.legend()
+pl.title('Score vs. Maximum SNR')
+pl.ylabel('Score')
+pl.xlabel('Maximum SNR')
+pl.savefig('%s/run_%s/score_vs_maxsnr.png' % (out_dir,now))
 pl.close()
 
-#Make Ratio Chirp vs score plot
-pl.scatter(pred_prob,test_data[:,4])
-pl.title('Chirp Mass Ratio vs. Score')
-pl.xlabel('Score')
-pl.ylabel('Chirp Mass Ratio')
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/ratio_chirp_vs_score.png' % now)
+#Make score vs Ratio Chirp plot
+pl.scatter(test_data_p[0:len(trig_test),4],pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,4],pred_prob[len(trig_test):],label='injection')
+pl.legend()
+pl.title('Score vs. Chirp Mass Ratio')
+pl.ylabel('Score')
+pl.xlabel('Chirp Mass Ratio')
+pl.savefig('%s/run_%s/score_vs_ratio_chirp.png' % (out_dir,now))
 pl.close()
 
-#Make time diff vs score plot
-pl.scatter(pred_prob,test_data[:,0])
-pl.title('Time Diff vs. Score')
-pl.xlabel('Score')
-pl.ylabel('Time Diff')
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/delT_vs_score.png' % now)
+#Make score vs time diffplot
+pl.scatter(test_data_p[0:len(trig_test),5],pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,5],pred_prob[len(trig_test):],label='injection')
+pl.legend()
+pl.title('Score vs. Time Diff')
+pl.ylabel('Score')
+pl.xlabel('Time Diff')
+pl.savefig('%s/run_%s/score_vs_delT.png' % (out_dir,now))
 pl.close()
 
 #Colored Plots
 #Count vs. marg_l plot
-pl.scatter(test_data[:,0],test_data[:,1],c=pred_prob)
+pl.scatter(test_data_p[0:len(trig_test),0],test_data_p[0:len(trig_test),1],c=pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,0],test_data_p[len(trig_test):,1],c=pred_prob[len(trig_test):],label='injection')
+pl.legend()
 pl.title('Count vs. Marg_l')
 pl.colorbar()
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/colored_plots/count_vs_marg_l.png' % now)
+pl.savefig('%s/run_%s/colored_plots/count_vs_marg_l.png' % (out_dir,now))
 pl.close()
 
 #Count vs. Maxnewsnr
-pl.scatter(test_data[:,2],test_data[:,1],c=pred_prob)
+pl.scatter(test_data_p[0:len(trig_test),2],test_data_p[0:len(trig_test),1],c=pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,2],test_data_p[len(trig_test):,1],c=pred_prob[len(trig_test):],label='injection')
+pl.legend()
 pl.title('Count vs. MaxNewSNR')
 pl.colorbar()
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/colored_plots/count_vs_maxnewsnr.png' % now)
+pl.savefig('%s/run_%s/colored_plots/count_vs_maxnewsnr.png' % (out_dir,now))
 pl.close()
 
 #Count vs. Maxsnr
-pl.scatter(test_data[:,3],test_data[:,1],c=pred_prob)
+pl.scatter(test_data_p[0:len(trig_test),3],test_data_p[0:len(trig_test),1],c=pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,3],test_data_p[len(trig_test):,1],c=pred_prob[len(trig_test):],label='injection')
+pl.legend()
 pl.title('Count vs. MaxSNR')
 pl.colorbar()
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/colored_plots/count_vs_maxsnr.png' % now)
+pl.savefig('%s/run_%s/colored_plots/count_vs_maxsnr.png' % (out_dir,now))
 pl.close()
 
 #Marg_l vs. Maxnewsnr
-pl.scatter(test_data[:,2],test_data[:,0],c=pred_prob)
+pl.scatter(test_data_p[0:len(trig_test),2],test_data_p[0:len(trig_test),0],c=pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,2],test_data_p[len(trig_test):,0],c=pred_prob[len(trig_test):],label='injection')
+pl.legend()
 pl.title('Marg_l vs. MaxNewSNR')
 pl.colorbar()
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/colored_plots/marg_l_vs_maxnewsnr.png' % now)
+pl.savefig('%s/run_%s/colored_plots/marg_l_vs_maxnewsnr.png' % (out_dir,now))
 pl.close()
 
 #Marg_l vs. MaxSNR
-pl.scatter(test_data[:,3],test_data[:,0],c=pred_prob)
+pl.scatter(test_data_p[0:len(trig_test),3],test_data_p[0:len(trig_test),0],c=pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,3],test_data_p[len(trig_test):,0],c=pred_prob[len(trig_test):],label='injection')
+pl.legend()
 pl.title('Marg_l vs. MaxSNR')
 pl.colorbar()
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/colored_plots/marg_l_vs_maxsnr.png' % now)
+pl.savefig('%s/run_%s/colored_plots/marg_l_vs_maxsnr.png' % (out_dir,now))
 pl.close()
 
 #MaxNewSNR vs. MaxSNR
-pl.scatter(test_data[:,3],test_data[:,2],c=pred_prob)
+pl.scatter(test_data_p[0:len(trig_test),3],test_data_p[0:len(trig_test),2],c=pred_prob[0:len(trig_test)],label='background')
+pl.scatter(test_data_p[len(trig_test):,3],test_data_p[len(trig_test):,2],c=pred_prob[len(trig_test):],label='injection')
+pl.legend()
 pl.title('MaxNewSNR vs. MaxSNR')
 pl.colorbar()
-pl.savefig('/home/hunter.gabbard/public_html/simple_neural_net/inj_v_back_stats/run_%s/colored_plots/maxnewsnr_vs_maxsnr.png' % now)
+pl.savefig('%s/run_%s/colored_plots/maxnewsnr_vs_maxsnr.png' % (out_dir,now))
 pl.close()
 
 #Write data to an hdf file
