@@ -131,7 +131,7 @@ comb_all = np.vstack((trig_comb, inj_comb))
 #Randomizing the order of the background triggers
 indices_trig = np.random.permutation(trig_comb.shape[0])
 
-#Seperate data into training and testing
+#Separate data into training and testing
 trig_train_idx, trig_test_idx = indices_trig[:int(trig_comb.shape[0]*.7)], indices_trig[int(trig_comb.shape[0]*.7):int(trig_comb.shape[0])]
 trig_train, trig_test = trig_comb[trig_train_idx,:], trig_comb[trig_test_idx,:]
 indices_inj = np.random.permutation(inj_comb.shape[0])
@@ -182,25 +182,31 @@ model.add(Dense(1, init='normal', activation='sigmoid'))
 print("[INFO] compiling model...")
 sgd = SGD(lr=0.05)
 model.compile(loss="binary_crossentropy", optimizer='adam',
-	metrics=["accuracy"], class_mode='binary')
+	metrics=["accuracy","binary_crossentropy"], class_mode='binary')
 
 #Creating sample weights vector
 trig_weights = np.zeros((trig_comb.shape[0],1))
 trig_weights.fill(1/((trig_comb.shape[0])/(inj_comb.shape[0])))
 trig_w_train = trig_weights[:int(trig_comb.shape[0]*.7)]
 trig_w_test = trig_weights[int(trig_comb.shape[0]*.7):]
-train_weights = np.vstack((trig_w_train,inj_train_weight)).flatten()
+train_weights = 100.*np.vstack((trig_w_train,inj_train_weight)).flatten()
+test_weights = 100.*np.vstack((trig_w_test,inj_test_weight)).flatten()
 
 #model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
-hist = model.fit(train_data, lab_train, nb_epoch=500, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
+hist = model.fit(train_data, lab_train,
+                    nb_epoch=500, batch_size=65536,
+                    sample_weight=train_weights,
+                    validation_data=(test_data,lab_test,test_weights),
+                    shuffle=True, show_accuracy=True)
 print(hist.history)
 
 # show the accuracy on the testing set
 print("[INFO] evaluating on testing set...")
-(loss, accuracy) = model.evaluate(test_data, lab_test,
-	batch_size=32, verbose=1)
-print("[INFO] loss={:.4f}, accuracy: {:.4f}%".format(loss,
-	accuracy * 100))
+eval_results = model.evaluate(test_data, lab_test,
+                                    sample_weight=test_weights,
+	                                batch_size=32, verbose=1)
+print("[INFO] loss={:.4f}, accuracy: {:.4f}%".format(eval_results[0],
+	eval_results[1] * 100))
 #Saving prediction probabilities to a variable
 res_pre = model.predict(test_data)
 
