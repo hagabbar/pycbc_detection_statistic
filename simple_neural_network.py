@@ -118,11 +118,11 @@ test_data_p = np.vstack((trig_test_p, inj_test_p))
 
 
 #Normalizing
-marg_l = ((comb_all[:,0] - comb_all[:,0].mean())/comb_all[:,0].max()).reshape((comb_all.shape[0],1))
+marg_l = ((np.log(comb_all[:,0]) - np.log(comb_all[:,0]).mean())/np.log(comb_all[:,0]).max()).reshape((comb_all.shape[0],1))
 count = ((comb_all[:,1] - comb_all[:,1].mean())/comb_all[:,1].max()).reshape((comb_all.shape[0],1))
-maxnewsnr = ((comb_all[:,2] - comb_all[:,2].mean())/comb_all[:,2].max()).reshape((comb_all.shape[0],1))
-maxsnr = ((comb_all[:,3] - comb_all[:,3].mean())/comb_all[:,3].max()).reshape((comb_all.shape[0],1))
-ratio_chirp = ((comb_all[:,4] - comb_all[:,4].mean())/comb_all[:,4].max()).reshape((comb_all.shape[0],1))
+maxnewsnr = ((np.log(comb_all[:,2]) - np.log(comb_all[:,2]).mean())/np.log(comb_all[:,2]).max()).reshape((comb_all.shape[0],1))
+maxsnr = ((np.log(comb_all[:,3]) - np.log(comb_all[:,3]).mean())/np.log(comb_all[:,3]).max()).reshape((comb_all.shape[0],1))
+ratio_chirp = ((np.log(comb_all[:,4]) - np.log(comb_all[:,4]).mean())/np.log(comb_all[:,4]).max()).reshape((comb_all.shape[0],1))
 delT = ((comb_all[:,5] - comb_all[:,5].mean())/comb_all[:,5].max()).reshape((comb_all.shape[0],1))
 trig_comb = np.hstack((marg_l[0:trig_comb.shape[0]],count[0:trig_comb.shape[0]],maxnewsnr[0:trig_comb.shape[0]],maxsnr[0:trig_comb.shape[0]],ratio_chirp[0:trig_comb.shape[0]],delT[0:trig_comb.shape[0]]))
 inj_comb = np.hstack((marg_l[trig_comb.shape[0]:],count[trig_comb.shape[0]:],maxnewsnr[trig_comb.shape[0]:],maxsnr[trig_comb.shape[0]:],ratio_chirp[trig_comb.shape[0]:],delT[trig_comb.shape[0]:]))
@@ -157,31 +157,33 @@ labels_all = np.vstack((c_zero,c_ones))
 # define the architecture of the network (sigmoid nodes)
 model = Sequential()
 early_stopping = EarlyStopping(monitor='val_loss', patience=2)
-#model.add(Dense(200, input_dim=trig_comb.shape[1],activation='relu'))
-model.add(Dense(10, init='normal', input_dim=6, activation='relu'))
-model.add(Dense(6, init='normal', activation='relu'))
-model.add(Dense(6, init='normal', activation='relu'))
+model.add(Dense(200, input_dim=trig_comb.shape[1],activation='relu'))
+
+#model.add(Dense(25, init='normal', input_dim=6, activation='relu'))
+#model.add(Dense(21, init='normal', activation='relu'))
+#model.add(Dense(21, init='normal', activation='relu'))
+
 #model.add(Dense(3, activation='relu'))
 #model.add(Dropout(0.2))
 #model.add(Dense(3, activation='relu'))
 
 
-#model.add(Dense(300, activation='relu'))
+model.add(Dense(300, activation='relu'))
 #model.add(Dropout(0.2))
-#model.add(Dense(500, activation='relu'))
+model.add(Dense(500, activation='relu'))
 #model.add(Dropout(0.2))
-#model.add(Dense(700, activation='relu'))
+model.add(Dense(700, activation='relu'))
 #model.add(Dropout(0.2))
-#model.add(Dense(500, activation='relu'))
+model.add(Dense(500, activation='relu'))
 #model.add(Dropout(0.2))
-#model.add(Dense(200, activation='relu'))
+model.add(Dense(200, activation='relu'))
 
 model.add(Dense(1, init='normal', activation='sigmoid'))
 
 #Compiling model
 print("[INFO] compiling model...")
 sgd = SGD(lr=0.05)
-model.compile(loss="binary_crossentropy", optimizer='adam',
+model.compile(loss="binary_crossentropy", optimizer='rmsprop',
 	metrics=["accuracy","binary_crossentropy"], class_mode='binary')
 
 #Creating sample weights vector
@@ -194,7 +196,7 @@ test_weights = 100.*np.vstack((trig_w_test,inj_test_weight)).flatten()
 
 #model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
 hist = model.fit(train_data, lab_train,
-                    nb_epoch=500, batch_size=65536,
+                    nb_epoch=1000, batch_size=65536,
                     sample_weight=train_weights,
                     validation_data=(test_data,lab_test,test_weights),
                     shuffle=True, show_accuracy=True)
@@ -238,23 +240,27 @@ orig_test_labels = lab_test[pred_prob[:].argsort()][::-1]
 
 
 #Function to calculate ROC values
-def ROC(n_noise, weight, inj_param, noise_param):
+def ROC(inj_weight, inj_param, noise_param):
 
+    #Assert that length of inj weights and injection parameters are the same
+    assert len(inj_weight) == len(inj_param)
+   
+    #Initialize variables/arrays
     ROC_value = 0
     FAP = []
     np.array(FAP)
     ROC_sum = []
     np.array(ROC_sum)
 
-    for idx in range(n_noise):
+    for idx in range(len(noise_param)):
         #Calculate false alarm probability value
-        FAP.append((float(idx+1))/n_noise)
+        FAP.append((float(idx+1))/len(noise_param))
         
         #Compute sum
-        ROC_value = weight[inj_param >= noise_param[idx]].sum()
+        ROC_value = inj_weight[inj_param >= noise_param[idx]].sum()
         
         #Append
-        ROC_sum = np.append(ROC_sum, ROC_value)
+        ROC_sum.append(ROC_value)
 
         #Normalize ROC y axis
         ROC_sum = np.asarray(ROC_sum)
@@ -310,7 +316,7 @@ np.save('%s/run_%s/hist.npy' % (out_dir,now), hist.history)
 #Make ROC Curve
 pl.plot(FAP,ROC_w_sum,label='NN Score')
 pl.plot(FAP,ROC_newsnr_sum,label='New SNR')
-pl.legend()
+pl.legend(frameon=True)
 pl.title('ROC Curve')
 pl.xlabel('False Alarm Probability')
 pl.ylabel('Weighted Sum')
@@ -319,9 +325,9 @@ pl.savefig('%s/run_%s/ROC_curve.png' % (out_dir,now))
 pl.close()
 
 #Make score vs. marginal likelihood plot
-pl.scatter(test_data_p[0:len(trig_test),0],pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,0],pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),0],pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,0],pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Score vs. Marginal Likelihood')
 pl.ylabel('Score')
 pl.xlabel('Marginal Likelihood')
@@ -329,9 +335,9 @@ pl.savefig('%s/run_%s/score_vs_marg_l.png' % (out_dir,now))
 pl.close()
 
 #Make score vs. count plot
-pl.scatter(test_data_p[0:len(trig_test),1],pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,1],pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),1],pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,1],pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Score vs. Count')
 pl.ylabel('Score')
 pl.xlabel('Count')
@@ -339,9 +345,9 @@ pl.savefig('%s/run_%s/score_vs_count.png' % (out_dir,now))
 pl.close()
 
 #Make score vs maxnewsnr plot
-pl.scatter(test_data_p[0:len(trig_test),2],pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,2],pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),2],pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,2],pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Score vs. Max New SNR')
 pl.ylabel('Score')
 pl.xlabel('Max New SNR')
@@ -349,9 +355,9 @@ pl.savefig('%s/run_%s/score_vs_maxnewsnr.png' % (out_dir,now))
 pl.close()
 
 #Make score vs maxsnr plot
-pl.scatter(test_data_p[0:len(trig_test),3],pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,3],pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),3],pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,3],pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Score vs. Maximum SNR')
 pl.ylabel('Score')
 pl.xlabel('Maximum SNR')
@@ -359,9 +365,9 @@ pl.savefig('%s/run_%s/score_vs_maxsnr.png' % (out_dir,now))
 pl.close()
 
 #Make score vs Ratio Chirp plot
-pl.scatter(test_data_p[0:len(trig_test),4],pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,4],pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),4],pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,4],pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Score vs. Chirp Mass Ratio')
 pl.ylabel('Score')
 pl.xlabel('Chirp Mass Ratio')
@@ -369,9 +375,9 @@ pl.savefig('%s/run_%s/score_vs_ratio_chirp.png' % (out_dir,now))
 pl.close()
 
 #Make score vs time diffplot
-pl.scatter(test_data_p[0:len(trig_test),5],pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,5],pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),5],pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,5],pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Score vs. Time Diff')
 pl.ylabel('Score')
 pl.xlabel('Time Diff')
@@ -380,55 +386,67 @@ pl.close()
 
 #Colored Plots
 #Count vs. marg_l plot
-pl.scatter(test_data_p[0:len(trig_test),0],test_data_p[0:len(trig_test),1],c=pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,0],test_data_p[len(trig_test):,1],c=pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),0],test_data_p[0:len(trig_test),1],c=pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,0],test_data_p[len(trig_test):,1],c=pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Count vs. Marg_l')
+pl.xlabel('Marginal likelihood')
+pl.ylabel('Count')
 pl.colorbar()
 pl.savefig('%s/run_%s/colored_plots/count_vs_marg_l.png' % (out_dir,now))
 pl.close()
 
 #Count vs. Maxnewsnr
-pl.scatter(test_data_p[0:len(trig_test),2],test_data_p[0:len(trig_test),1],c=pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,2],test_data_p[len(trig_test):,1],c=pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),2],test_data_p[0:len(trig_test),1],c=pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,2],test_data_p[len(trig_test):,1],c=pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Count vs. MaxNewSNR')
+pl.xlabel('Max New SNR')
+pl.ylabel('Count')
 pl.colorbar()
 pl.savefig('%s/run_%s/colored_plots/count_vs_maxnewsnr.png' % (out_dir,now))
 pl.close()
 
 #Count vs. Maxsnr
-pl.scatter(test_data_p[0:len(trig_test),3],test_data_p[0:len(trig_test),1],c=pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,3],test_data_p[len(trig_test):,1],c=pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),3],test_data_p[0:len(trig_test),1],c=pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,3],test_data_p[len(trig_test):,1],c=pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Count vs. MaxSNR')
+pl.xlabel('Max SNR')
+pl.ylabel('Count')
 pl.colorbar()
 pl.savefig('%s/run_%s/colored_plots/count_vs_maxsnr.png' % (out_dir,now))
 pl.close()
 
 #Marg_l vs. Maxnewsnr
-pl.scatter(test_data_p[0:len(trig_test),2],test_data_p[0:len(trig_test),0],c=pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,2],test_data_p[len(trig_test):,0],c=pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),2],test_data_p[0:len(trig_test),0],c=pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,2],test_data_p[len(trig_test):,0],c=pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Marg_l vs. MaxNewSNR')
+pl.xlabel('Max New SNR')
+pl.ylabel('Marginal Likelihood')
 pl.colorbar()
 pl.savefig('%s/run_%s/colored_plots/marg_l_vs_maxnewsnr.png' % (out_dir,now))
 pl.close()
 
 #Marg_l vs. MaxSNR
-pl.scatter(test_data_p[0:len(trig_test),3],test_data_p[0:len(trig_test),0],c=pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,3],test_data_p[len(trig_test):,0],c=pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),3],test_data_p[0:len(trig_test),0],c=pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,3],test_data_p[len(trig_test):,0],c=pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('Marg_l vs. MaxSNR')
+pl.xlabel('Max SNR')
+pl.ylabel('Marginal Likelihood')
 pl.colorbar()
 pl.savefig('%s/run_%s/colored_plots/marg_l_vs_maxsnr.png' % (out_dir,now))
 pl.close()
 
 #MaxNewSNR vs. MaxSNR
-pl.scatter(test_data_p[0:len(trig_test),3],test_data_p[0:len(trig_test),2],c=pred_prob[0:len(trig_test)],label='background')
-pl.scatter(test_data_p[len(trig_test):,3],test_data_p[len(trig_test):,2],c=pred_prob[len(trig_test):],label='injection')
-pl.legend()
+pl.scatter(test_data_p[0:len(trig_test),3],test_data_p[0:len(trig_test),2],c=pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,3],test_data_p[len(trig_test):,2],c=pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
 pl.title('MaxNewSNR vs. MaxSNR')
+pl.xlabel('Max SNR')
+pl.ylabel('Max New SNR')
 pl.colorbar()
 pl.savefig('%s/run_%s/colored_plots/maxnewsnr_vs_maxsnr.png' % (out_dir,now))
 pl.close()
