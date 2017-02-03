@@ -1,0 +1,3 @@
+source /home/tdent/pycbc-27/bin/activate
+
+python get_sngl_stats --single-trigger-files H1-HDF_TRIGGER_MERGE_FULL_DATA-1128299417-1083600.hdf --ifo H1 --veto-file H1L1-CUMULATIVE_CAT_12H_VETO_SEGMENTS.xml --veto-segment-name CUMULATIVE_CAT_12H --window 1 --output-file out.hdf --inj-file H1-HDF_TRIGGER_MERGE_BBH01_INJ-1128299417-1083600.hdf --inj-coinc-file H1L1-HDFINJFIND_BBH01_INJ_INJ_INJ-1128299417-1083600.hdf --ifar-thresh 0.1

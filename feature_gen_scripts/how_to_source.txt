@@ -1,0 +1,2 @@
+. /Users/hugabb/fulbright/pycbc-dev/bin/activate
+ . /Users/hugabb/opt/lalsuite_pycbc/etc/lalsuite-user-env.sh
