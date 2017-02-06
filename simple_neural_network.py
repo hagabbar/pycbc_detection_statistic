@@ -6,6 +6,7 @@
 
 from __future__ import division
 import argparse
+import keras
 from keras.models import Sequential
 from keras.layers import LSTM, Dense
 import numpy as np
@@ -45,7 +46,40 @@ args = vars(ap.parse_args())
 data_files = args['dataset'].split(',')
 out_dir = args['output_dir']
 
+
+#Definition for loading in dataset parameters into variables and then combine into a numpy array
+def load_back_data(data, params):
+    trig_comb = {}
+    params = ['marg_l','count','maxnewsnr','maxsnr','time','ratio_chirp','delT','delta_chirp','template_duration']
+    h1 = h5py.File(data.split(',')[0], 'r')
+    for label in h1['H1'].keys():
+        for key in params:
+            if label == key:
+                trig_comb[label] = np.asarray(h1['H1/%s' % label][:]).reshape((h1['H1/%s' % label].shape[0],1))
+    return trig_comb
+
+#Load CBC/noise triggers from multiple data sets
+def load_inj_data(data, params):
+    trig_comb = {}
+    params = ['marg_l','count','maxnewsnr','maxsnr','time','ratio_chirp','delT','delta_chirp','template_duration']
+    for fi in data:
+        h1 = h5py.File(fi, 'r')
+        if data.split(',')[0] == fi:
+            for label in h1['H1'].keys():
+                for key in params:
+                    if label == key:
+                        trig_comb[label] = np.asarray(h1['H1/%s' % label][:]).reshape((h1['H1/%s' % label].shape[0],1))
+        else:
+            for label in h1['H1'].keys():
+                for key in params:
+                    if label == key:
+                        trig_comb[label+'_inj_new'] = np.asarray(h1['H1/%s' % label][:]).reshape((h1['H1/%s' % label].shape[0],1)) 
+                        trig_comb[label+'_inj'] = np.vstack((trig_comb[label+'_inj'], trig_comb[label+'_inj_new']))
+
+    return trig_comb
+
 #Load in dataset parameters into variables and then combine into a numpy array
+#converted
 trig_comb = []
 np.asarray(trig_comb)
 h1 = h5py.File(args['dataset'].split(',')[0], 'r')
@@ -57,11 +91,14 @@ time = np.asarray(h1['H1/time'][:]).reshape((h1['H1/time'].shape[0],1))
 ratio_chirp = np.asarray(h1['H1/ratio_chirp'][:]).reshape((h1['H1/ratio_chirp'].shape[0],1))
 delT = np.asarray(h1['H1/delT'][:]).reshape((h1['H1/delT'].shape[0],1))
 delta_chirp = np.asarray(h1['H1/delta_chirp'][:]).reshape((h1['H1/delta_chirp'].shape[0],1))
+tmp_dur = np.asarray(h1['H1/template_duration'][:]).reshape((h1['H1/template_duration'].shape[0],1))
 
-trig_comb = np.hstack((marg_l, count, maxnewsnr, maxsnr, ratio_chirp, delT))
+trig_comb = np.hstack((marg_l, count, maxnewsnr, maxsnr, ratio_chirp, delT, tmp_dur))
 
 #load CBC/noise triggers and identify labels
+#converted
 for fi in data_files:
+    print fi
     h1 = h5py.File(fi, 'r')
     if args['dataset'].split(',')[0] == fi:
         marg_l_inj = np.asarray(h1['H1/marg_l_inj'][:]).reshape((h1['H1/marg_l_inj'].shape[0],1))
@@ -72,7 +109,8 @@ for fi in data_files:
         ratio_chirp_inj = np.asarray(h1['H1/ratio_chirp_inj'][:]).reshape((h1['H1/ratio_chirp_inj'].shape[0],1))
         delT_inj = np.asarray(h1['H1/delT_inj'][:]).reshape((h1['H1/delT_inj'].shape[0],1))
         delta_chirp_inj = np.asarray(h1['H1/delta_chirp_inj'][:]).reshape((h1['H1/delta_chirp_inj'].shape[0],1))
-        eff_dist_inj = np.asarray(h1['H1/eff_dist_inj'][:]).reshape((h1['H1/eff_dist_inj'].shape[0],1))
+        dist_inj = np.asarray(h1['H1/dist_inj'][:]).reshape((h1['H1/dist_inj'].shape[0],1))
+        tmp_dur_inj = np.asarray(h1['H1/template_duration_inj'][:]).reshape((h1['H1/template_duration_inj'].shape[0],1))
 
     else:
         marg_l_inj_new = np.asarray(h1['H1/marg_l_inj'][:]).reshape((h1['H1/marg_l_inj'].shape[0],1))
@@ -91,21 +129,38 @@ for fi in data_files:
         delT_inj = np.vstack((delT_inj, delT_inj_new))
         delta_chirp_inj_new = np.asarray(h1['H1/delta_chirp_inj'][:]).reshape((h1['H1/delta_chirp_inj'].shape[0],1))
         delta_chirp_inj = np.vstack((delta_chirp_inj, delta_chirp_inj_new))
-        eff_dist_inj_new = np.asarray(h1['H1/eff_dist_inj'][:]).reshape((h1['H1/eff_dist_inj'].shape[0],1))
-        eff_dist_inj = np.vstack((eff_dist_inj, eff_dist_inj_new))
+        dist_inj_new = np.asarray(h1['H1/dist_inj'][:]).reshape((h1['H1/dist_inj'].shape[0],1))
+        dist_inj = np.vstack((dist_inj, dist_inj_new))
+        tmp_dur_inj_new = np.asarray(h1['H1/template_duration_inj'][:]).reshape((h1['H1/template_duration_inj'].shape[0],1))
+        tmp_dur_inj = np.vstack((tmp_dur_inj, tmp_dur_inj_new))
 
-
+#Getting injection weights
 inj_weights_pre = []
 np.asarray(inj_weights_pre)
-dist_inj_mean = (eff_dist_inj**2).mean()
+dist_inj_mean = (dist_inj**2).mean()
 for idx in enumerate(delta_chirp_inj):
     idx = idx[0]
-    inj_weights_pre.append((eff_dist_inj[idx][0]**2)/dist_inj_mean)
+    inj_weights_pre.append((dist_inj[idx][0]**2)/dist_inj_mean)
 
 inj_weights = np.asarray(inj_weights_pre).reshape((delta_chirp_inj.shape[0],1))
 
 #Retaining pre-normalized feature values for plots
-inj_comb = np.hstack((marg_l_inj, count_inj, maxnewsnr_inj, maxsnr_inj, ratio_chirp_inj, delT_inj))
+def orig_norm(back_trig, inj_trig, tt_split):
+    inj_trig = np.array(inj_trig.items(), dtype=dtype) 
+    comb_all = np.vstack((back_trig, inj_trig))
+    indices_trig = np.random.permutation(back_trig.shape[0])
+    trig_train_idx, trig_test_idx = indices_trig[:int(back_trig.shape[0]*tt_split)], indices_trig[int(back_trig.shape[0]*tt_split):int(back_trig.shape[0])]
+    trig_train_p, trig_test_p = back_trig[trig_train_idx,:], back_trig[trig_test_idx,:]
+    indices_inj = np.random.permutation(inj_trig.shape[0])
+    inj_train_idx, inj_test_idx = indices_inj[:int(inj_trig.shape[0]*tt_split)], indices_inj[int(inj_trig.shape[0]*tt_split):]
+    inj_train_p, inj_test_p = inj_trig[inj_train_idx,:], inj_trig[inj_test_idx,:]
+    train_data_p = np.vstack((trig_train_p, inj_train_p))
+    test_data_p = np.vstack((trig_test_p, inj_test_p))
+    return train_data_p, test_data_p
+
+#Retaining pre-normalized feature values for plots
+#converted
+inj_comb = np.hstack((marg_l_inj, count_inj, maxnewsnr_inj, maxsnr_inj, ratio_chirp_inj, delT_inj, tmp_dur_inj))
 comb_all = np.vstack((trig_comb, inj_comb))
 indices_trig = np.random.permutation(trig_comb.shape[0])
 trig_train_idx, trig_test_idx = indices_trig[:int(trig_comb.shape[0]*.7)], indices_trig[int(trig_comb.shape[0]*.7):int(trig_comb.shape[0])]
@@ -116,7 +171,7 @@ inj_train_p, inj_test_p = inj_comb[inj_train_idx,:], inj_comb[inj_test_idx,:]
 train_data_p = np.vstack((trig_train_p, inj_train_p))
 test_data_p = np.vstack((trig_test_p, inj_test_p))
 
-
+#def normalize():
 #Normalizing
 marg_l = ((np.log(comb_all[:,0]) - np.log(comb_all[:,0]).mean())/np.log(comb_all[:,0]).max()).reshape((comb_all.shape[0],1))
 count = ((comb_all[:,1] - comb_all[:,1].mean())/comb_all[:,1].max()).reshape((comb_all.shape[0],1))
@@ -124,8 +179,9 @@ maxnewsnr = ((np.log(comb_all[:,2]) - np.log(comb_all[:,2]).mean())/np.log(comb_
 maxsnr = ((np.log(comb_all[:,3]) - np.log(comb_all[:,3]).mean())/np.log(comb_all[:,3]).max()).reshape((comb_all.shape[0],1))
 ratio_chirp = ((np.log(comb_all[:,4]) - np.log(comb_all[:,4]).mean())/np.log(comb_all[:,4]).max()).reshape((comb_all.shape[0],1))
 delT = ((comb_all[:,5] - comb_all[:,5].mean())/comb_all[:,5].max()).reshape((comb_all.shape[0],1))
-trig_comb = np.hstack((marg_l[0:trig_comb.shape[0]],count[0:trig_comb.shape[0]],maxnewsnr[0:trig_comb.shape[0]],maxsnr[0:trig_comb.shape[0]],ratio_chirp[0:trig_comb.shape[0]],delT[0:trig_comb.shape[0]]))
-inj_comb = np.hstack((marg_l[trig_comb.shape[0]:],count[trig_comb.shape[0]:],maxnewsnr[trig_comb.shape[0]:],maxsnr[trig_comb.shape[0]:],ratio_chirp[trig_comb.shape[0]:],delT[trig_comb.shape[0]:]))
+tmp_dur = ((np.log(comb_all[:,6]) - np.log(comb_all[:,6]).mean())/np.log(comb_all[:,6]).max()).reshape((comb_all.shape[0],1))
+trig_comb = np.hstack((marg_l[0:trig_comb.shape[0]],count[0:trig_comb.shape[0]],maxnewsnr[0:trig_comb.shape[0]],maxsnr[0:trig_comb.shape[0]],ratio_chirp[0:trig_comb.shape[0]],delT[0:trig_comb.shape[0]],tmp_dur[0:trig_comb.shape[0]]))
+inj_comb = np.hstack((marg_l[trig_comb.shape[0]:],count[trig_comb.shape[0]:],maxnewsnr[trig_comb.shape[0]:],maxsnr[trig_comb.shape[0]:],ratio_chirp[trig_comb.shape[0]:],delT[trig_comb.shape[0]:],tmp_dur[trig_comb.shape[0]:]))
 comb_all = np.vstack((trig_comb, inj_comb))
 
 #Randomizing the order of the background triggers
@@ -156,8 +212,10 @@ labels_all = np.vstack((c_zero,c_ones))
 
 # define the architecture of the network (sigmoid nodes)
 model = Sequential()
+act = keras.layers.advanced_activations.LeakyReLU(alpha=0.3)
 early_stopping = EarlyStopping(monitor='val_loss', patience=2)
-model.add(Dense(200, input_dim=trig_comb.shape[1],activation='relu'))
+model.add(Dense(200, input_dim=trig_comb.shape[1]))
+act
 
 #model.add(Dense(25, init='normal', input_dim=6, activation='relu'))
 #model.add(Dense(21, init='normal', activation='relu'))
@@ -168,15 +226,20 @@ model.add(Dense(200, input_dim=trig_comb.shape[1],activation='relu'))
 #model.add(Dense(3, activation='relu'))
 
 
-model.add(Dense(300, activation='relu'))
+model.add(Dense(300))
+act
 #model.add(Dropout(0.2))
-model.add(Dense(500, activation='relu'))
+model.add(Dense(500))
+act
 #model.add(Dropout(0.2))
-model.add(Dense(700, activation='relu'))
+model.add(Dense(700))
+act
 #model.add(Dropout(0.2))
-model.add(Dense(500, activation='relu'))
+model.add(Dense(500))
+act
 #model.add(Dropout(0.2))
-model.add(Dense(200, activation='relu'))
+model.add(Dense(200))
+act
 
 model.add(Dense(1, init='normal', activation='sigmoid'))
 
@@ -196,7 +259,7 @@ test_weights = 100.*np.vstack((trig_w_test,inj_test_weight)).flatten()
 
 #model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
 hist = model.fit(train_data, lab_train,
-                    nb_epoch=1000, batch_size=65536,
+                    nb_epoch=1000, batch_size=100000,    #66000
                     sample_weight=train_weights,
                     validation_data=(test_data,lab_test,test_weights),
                     shuffle=True, show_accuracy=True)
@@ -384,6 +447,16 @@ pl.xlabel('Time Diff')
 pl.savefig('%s/run_%s/score_vs_delT.png' % (out_dir,now))
 pl.close()
 
+#Make score vs template duration diffplot
+pl.scatter(test_data_p[0:len(trig_test),6],pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,6],pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
+pl.title('Score vs. Template Duration')
+pl.ylabel('Score')
+pl.xlabel('Template Duration')
+pl.savefig('%s/run_%s/score_vs_tmp_dur.png' % (out_dir,now))
+pl.close()
+
 #Colored Plots
 #Count vs. marg_l plot
 pl.scatter(test_data_p[0:len(trig_test),0],test_data_p[0:len(trig_test),1],c=pred_prob[0:len(trig_test)],marker="o",label='background')
@@ -418,6 +491,17 @@ pl.colorbar()
 pl.savefig('%s/run_%s/colored_plots/count_vs_maxsnr.png' % (out_dir,now))
 pl.close()
 
+#log(template duration) vs. New SNR
+pl.scatter(test_data_p[0:len(trig_test),2],test_data_p[0:len(trig_test),6],c=pred_prob[0:len(trig_test)],marker="o",label='background')
+pl.scatter(test_data_p[len(trig_test):,2],test_data_p[len(trig_test):,6],c=pred_prob[len(trig_test):],marker="^",label='injection')
+pl.legend(frameon=True)
+pl.title('log Template Duration vs. New SNR')
+pl.xlabel('New SNR')
+pl.ylabel('log Template Duration')
+pl.colorbar()
+pl.savefig('%s/run_%s/colored_plots/tempdur_vs_maxnewsnr.png' % (out_dir,now))
+pl.close()
+
 #Marg_l vs. Maxnewsnr
 pl.scatter(test_data_p[0:len(trig_test),2],test_data_p[0:len(trig_test),0],c=pred_prob[0:len(trig_test)],marker="o",label='background')
 pl.scatter(test_data_p[len(trig_test):,2],test_data_p[len(trig_test):,0],c=pred_prob[len(trig_test):],marker="^",label='injection')
@@ -450,6 +534,20 @@ pl.ylabel('Max New SNR')
 pl.colorbar()
 pl.savefig('%s/run_%s/colored_plots/maxnewsnr_vs_maxsnr.png' % (out_dir,now))
 pl.close()
+
+#Loss vs. Epoch
+pl.plot(hist.history['loss'])
+pl.title('Loss vs. Epoch')
+pl.xlabel('Epoch')
+pl.ylabel('Loss')
+pl.savefig('%s/run_%s/loss_vs_epoch.png' % (out_dir,now))
+
+#Accuracy vs. Epoch
+pl.plot(hist.history['acc'])
+pl.title('Accuracy vs. Epoch')
+pl.xlabel('Epoch')
+pl.ylabel('Accuracy')
+pl.savefig('%s/run_%s/acc_vs_epoch.png' % (out_dir,now))
 
 #Write data to an hdf file
 with h5py.File('nn_data.hdf', 'w') as hf:
