@@ -550,7 +550,7 @@ pl.ylabel('Accuracy')
 pl.savefig('%s/run_%s/acc_vs_epoch.png' % (out_dir,now))
 
 #Write data to an hdf file
-with h5py.File('nn_data.hdf', 'w') as hf:
+with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
     hf.create_dataset('FAP', data=FAP)
     hf.create_dataset('ROC_w_sum', data=ROC_w_sum)
     hf.create_dataset('pred_prob', data=pred_prob)
