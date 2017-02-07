@@ -231,7 +231,7 @@ act
 #model.add(Dropout(0.2))
 model.add(Dense(500))
 act
-#model.add(Dropout(0.2))
+model.add(Dropout(0.2))
 model.add(Dense(700))
 act
 #model.add(Dropout(0.2))
@@ -259,7 +259,7 @@ test_weights = 100.*np.vstack((trig_w_test,inj_test_weight)).flatten()
 
 #model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
 hist = model.fit(train_data, lab_train,
-                    nb_epoch=1000, batch_size=100000,    #66000
+                    nb_epoch=1000, batch_size=200000,    #66000
                     sample_weight=train_weights,
                     validation_data=(test_data,lab_test,test_weights),
                     shuffle=True, show_accuracy=True)
@@ -541,6 +541,7 @@ pl.title('Loss vs. Epoch')
 pl.xlabel('Epoch')
 pl.ylabel('Loss')
 pl.savefig('%s/run_%s/loss_vs_epoch.png' % (out_dir,now))
+pl.close()
 
 #Accuracy vs. Epoch
 pl.plot(hist.history['acc'])
@@ -548,6 +549,7 @@ pl.title('Accuracy vs. Epoch')
 pl.xlabel('Epoch')
 pl.ylabel('Accuracy')
 pl.savefig('%s/run_%s/acc_vs_epoch.png' % (out_dir,now))
+pl.close()
 
 #Write data to an hdf file
 with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
