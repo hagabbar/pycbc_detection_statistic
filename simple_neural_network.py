@@ -55,10 +55,19 @@ def load_back_data(data, params):
     trig_comb = {}
     params = ['marg_l','count','maxnewsnr','maxsnr','time','ratio_chirp','delT','delta_chirp','template_duration']
     h1 = h5py.File(data.split(',')[0], 'r')
-    for label in h1['H1'].keys():
-        for key in params:
-            if label == key:
-                trig_comb[label] = np.asarray(h1['H1/%s' % label][:]).reshape((h1['H1/%s' % label].shape[0],1))
+    for fi in data:
+        h1 = h5py.File(fi, 'r')
+        if data.split(',')[0] == fi:
+            for label in h1['H1'].keys():
+                for key in params:
+                    if label == key:
+                        trig_comb[label] = np.asarray(h1['H1/%s' % label][:]).reshape((h1['H1/%s' % label].shape[0],1))
+        else:
+            for label in h1['H1'].keys():
+                for key in params:
+                    if label == key:
+                        trig_comb[label+'_new'] = np.asarray(h1['H1/%s' % label][:]).reshape((h1['H1/%s' % label].shape[0],1))
+                        trig_comb[label] = np.vstack((trig_comb[label], trig_comb[label+'_new']))
     return trig_comb
 
 #Load CBC/noise triggers from multiple data sets
