@@ -39,11 +39,14 @@ now = datetime.datetime.now()
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--dataset", required=True,
 	help="path to input dataset")
+ap.add_argument("-b", "--back_dataset", required=True,
+        help="path to one dataset file from each chunk you are running over")
 ap.add_argument("-o", "--output_dir", required=True,
         help="path to output directory")
 args = vars(ap.parse_args())
 
 data_files = args['dataset'].split(',')
+back_files = args['back_dataset'].split(',')
 out_dir = args['output_dir']
 
 
@@ -82,16 +85,41 @@ def load_inj_data(data, params):
 #converted
 trig_comb = []
 np.asarray(trig_comb)
-h1 = h5py.File(args['dataset'].split(',')[0], 'r')
-marg_l = np.asarray(h1['H1/marg_l'][:]).reshape((h1['H1/marg_l'].shape[0],1))
-count = np.asarray(h1['H1/count'][:]).reshape((h1['H1/count'].shape[0],1))
-maxnewsnr = np.asarray(h1['H1/maxnewsnr'][:]).reshape((h1['H1/maxnewsnr'].shape[0],1))
-maxsnr = np.asarray(h1['H1/maxsnr'][:]).reshape((h1['H1/maxsnr'].shape[0],1))
-time = np.asarray(h1['H1/time'][:]).reshape((h1['H1/time'].shape[0],1))
-ratio_chirp = np.asarray(h1['H1/ratio_chirp'][:]).reshape((h1['H1/ratio_chirp'].shape[0],1))
-delT = np.asarray(h1['H1/delT'][:]).reshape((h1['H1/delT'].shape[0],1))
-delta_chirp = np.asarray(h1['H1/delta_chirp'][:]).reshape((h1['H1/delta_chirp'].shape[0],1))
-tmp_dur = np.asarray(h1['H1/template_duration'][:]).reshape((h1['H1/template_duration'].shape[0],1))
+for fi in back_files:
+    h1 = h5py.File(fi, 'r')
+    ifo = fi.split('/')[2]
+
+    if args['back_dataset'].split(',')[0] == fi:
+        marg_l = np.asarray(h1['%s/marg_l' % ifo][:]).reshape((h1['%s/marg_l' % ifo].shape[0],1))
+        count = np.asarray(h1['%s/count' % ifo][:]).reshape((h1['%s/count' % ifo].shape[0],1))
+        maxnewsnr = np.asarray(h1['%s/maxnewsnr' % ifo][:]).reshape((h1['%s/maxnewsnr' % ifo].shape[0],1))
+        maxsnr = np.asarray(h1['%s/maxsnr' % ifo][:]).reshape((h1['%s/maxsnr' % ifo].shape[0],1))
+        time = np.asarray(h1['%s/time' % ifo][:]).reshape((h1['%s/time' % ifo].shape[0],1))
+        ratio_chirp = np.asarray(h1['%s/ratio_chirp' % ifo][:]).reshape((h1['%s/ratio_chirp' % ifo].shape[0],1))
+        delT = np.asarray(h1['%s/delT' % ifo][:]).reshape((h1['%s/delT' % ifo].shape[0],1))
+        delta_chirp = np.asarray(h1['%s/delta_chirp' % ifo][:]).reshape((h1['%s/delta_chirp' % ifo].shape[0],1))
+        tmp_dur = np.asarray(h1['%s/template_duration' % ifo][:]).reshape((h1['%s/template_duration' % ifo].shape[0],1))
+
+    else:
+        marg_l_new = np.asarray(h1['%s/marg_l' % ifo][:]).reshape((h1['%s/marg_l' % ifo].shape[0],1))
+        count_new = np.asarray(h1['%s/count' % ifo][:]).reshape((h1['%s/count' % ifo].shape[0],1))
+        maxnewsnr_new = np.asarray(h1['%s/maxnewsnr' % ifo][:]).reshape((h1['%s/maxnewsnr' % ifo].shape[0],1))
+        maxsnr_new = np.asarray(h1['%s/maxsnr' % ifo][:]).reshape((h1['%s/maxsnr' % ifo].shape[0],1))
+        time_new = np.asarray(h1['%s/time' % ifo][:]).reshape((h1['%s/time' % ifo].shape[0],1))
+        ratio_chirp_new = np.asarray(h1['%s/ratio_chirp' % ifo][:]).reshape((h1['%s/ratio_chirp' % ifo].shape[0],1))
+        delT_new = np.asarray(h1['%s/delT' % ifo][:]).reshape((h1['%s/delT' % ifo].shape[0],1))
+        delta_chirp_new = np.asarray(h1['%s/delta_chirp' % ifo][:]).reshape((h1['%s/delta_chirp' % ifo].shape[0],1))
+        tmp_dur_new = np.asarray(h1['%s/template_duration' % ifo][:]).reshape((h1['%s/template_duration' % ifo].shape[0],1))
+
+        marg_l = np.vstack((marg_l, marg_l_new))
+        count = np.vstack((count, count_new))
+        maxnewsnr = np.vstack((maxnewsnr, maxnewsnr_new))
+        maxsnr = np.vstack((maxsnr, maxsnr_new))
+        time = np.vstack((time, time_new))
+        ratio_chirp = np.vstack((ratio_chirp, ratio_chirp_new))
+        delT = np.vstack((delT, delT_new))
+        delta_chirp = np.vstack((delta_chirp, delta_chirp_new))
+        tmp_dur = np.vstack((tmp_dur, tmp_dur_new))
 
 trig_comb = np.hstack((marg_l, count, maxnewsnr, maxsnr, ratio_chirp, delT, tmp_dur))
 
@@ -100,38 +128,39 @@ trig_comb = np.hstack((marg_l, count, maxnewsnr, maxsnr, ratio_chirp, delT, tmp_
 for fi in data_files:
     print fi
     h1 = h5py.File(fi, 'r')
+    ifo = fi.split('/')[2]
     if args['dataset'].split(',')[0] == fi:
-        marg_l_inj = np.asarray(h1['H1/marg_l_inj'][:]).reshape((h1['H1/marg_l_inj'].shape[0],1))
-        count_inj = np.asarray(h1['H1/count_inj'][:]).reshape((h1['H1/count_inj'].shape[0],1))
-        maxnewsnr_inj = np.asarray(h1['H1/maxnewsnr_inj'][:]).reshape((h1['H1/maxnewsnr_inj'].shape[0],1))
-        maxsnr_inj = np.asarray(h1['H1/maxsnr_inj'][:]).reshape((h1['H1/maxsnr_inj'].shape[0],1))
-        time_inj = np.asarray(h1['H1/time_inj'][:]).reshape((h1['H1/time_inj'].shape[0],1))
-        ratio_chirp_inj = np.asarray(h1['H1/ratio_chirp_inj'][:]).reshape((h1['H1/ratio_chirp_inj'].shape[0],1))
-        delT_inj = np.asarray(h1['H1/delT_inj'][:]).reshape((h1['H1/delT_inj'].shape[0],1))
-        delta_chirp_inj = np.asarray(h1['H1/delta_chirp_inj'][:]).reshape((h1['H1/delta_chirp_inj'].shape[0],1))
-        dist_inj = np.asarray(h1['H1/dist_inj'][:]).reshape((h1['H1/dist_inj'].shape[0],1))
-        tmp_dur_inj = np.asarray(h1['H1/template_duration_inj'][:]).reshape((h1['H1/template_duration_inj'].shape[0],1))
+        marg_l_inj = np.asarray(h1['%s/marg_l_inj' % ifo][:]).reshape((h1['%s/marg_l_inj' % ifo].shape[0],1))
+        count_inj = np.asarray(h1['%s/count_inj' % ifo][:]).reshape((h1['%s/count_inj' % ifo].shape[0],1))
+        maxnewsnr_inj = np.asarray(h1['%s/maxnewsnr_inj' % ifo][:]).reshape((h1['%s/maxnewsnr_inj' % ifo].shape[0],1))
+        maxsnr_inj = np.asarray(h1['%s/maxsnr_inj' % ifo][:]).reshape((h1['%s/maxsnr_inj' % ifo].shape[0],1))
+        time_inj = np.asarray(h1['%s/time_inj' % ifo][:]).reshape((h1['%s/time_inj' % ifo].shape[0],1))
+        ratio_chirp_inj = np.asarray(h1['%s/ratio_chirp_inj' % ifo][:]).reshape((h1['%s/ratio_chirp_inj' % ifo].shape[0],1))
+        delT_inj = np.asarray(h1['%s/delT_inj' % ifo][:]).reshape((h1['%s/delT_inj' % ifo].shape[0],1))
+        delta_chirp_inj = np.asarray(h1['%s/delta_chirp_inj' % ifo][:]).reshape((h1['%s/delta_chirp_inj' % ifo].shape[0],1))
+        dist_inj = np.asarray(h1['%s/dist_inj' % ifo][:]).reshape((h1['%s/dist_inj' % ifo].shape[0],1))
+        tmp_dur_inj = np.asarray(h1['%s/template_duration_inj' % ifo][:]).reshape((h1['%s/template_duration_inj' % ifo].shape[0],1))
 
     else:
-        marg_l_inj_new = np.asarray(h1['H1/marg_l_inj'][:]).reshape((h1['H1/marg_l_inj'].shape[0],1))
+        marg_l_inj_new = np.asarray(h1['%s/marg_l_inj' % ifo][:]).reshape((h1['%s/marg_l_inj' % ifo].shape[0],1))
         marg_l_inj = np.vstack((marg_l_inj, marg_l_inj_new))
-        count_inj_new = np.asarray(h1['H1/count_inj'][:]).reshape((h1['H1/count_inj'].shape[0],1))
+        count_inj_new = np.asarray(h1['%s/count_inj' % ifo][:]).reshape((h1['%s/count_inj' % ifo].shape[0],1))
         count_inj = np.vstack((count_inj, count_inj_new))
-        maxnewsnr_inj_new = np.asarray(h1['H1/maxnewsnr_inj'][:]).reshape((h1['H1/maxnewsnr_inj'].shape[0],1))
+        maxnewsnr_inj_new = np.asarray(h1['%s/maxnewsnr_inj' % ifo][:]).reshape((h1['%s/maxnewsnr_inj' % ifo].shape[0],1))
         maxnewsnr_inj = np.vstack((maxnewsnr_inj, maxnewsnr_inj_new))
-        maxsnr_inj_new = np.asarray(h1['H1/maxsnr_inj'][:]).reshape((h1['H1/maxsnr_inj'].shape[0],1))
+        maxsnr_inj_new = np.asarray(h1['%s/maxsnr_inj' % ifo][:]).reshape((h1['%s/maxsnr_inj' % ifo].shape[0],1))
         maxsnr_inj = np.vstack((maxsnr_inj, maxsnr_inj_new))
-        time_inj_new = np.asarray(h1['H1/time_inj'][:]).reshape((h1['H1/time_inj'].shape[0],1))
+        time_inj_new = np.asarray(h1['%s/time_inj' % ifo][:]).reshape((h1['%s/time_inj' % ifo].shape[0],1))
         time_inj = np.vstack((time_inj, time_inj_new))
-        ratio_chirp_inj_new = np.asarray(h1['H1/ratio_chirp_inj'][:]).reshape((h1['H1/ratio_chirp_inj'].shape[0],1))
+        ratio_chirp_inj_new = np.asarray(h1['%s/ratio_chirp_inj' % ifo][:]).reshape((h1['%s/ratio_chirp_inj' % ifo].shape[0],1))
         ratio_chirp_inj = np.vstack((ratio_chirp_inj, ratio_chirp_inj_new))
-        delT_inj_new = np.asarray(h1['H1/delT_inj'][:]).reshape((h1['H1/delT_inj'].shape[0],1))
+        delT_inj_new = np.asarray(h1['%s/delT_inj' % ifo][:]).reshape((h1['%s/delT_inj' % ifo].shape[0],1))
         delT_inj = np.vstack((delT_inj, delT_inj_new))
-        delta_chirp_inj_new = np.asarray(h1['H1/delta_chirp_inj'][:]).reshape((h1['H1/delta_chirp_inj'].shape[0],1))
+        delta_chirp_inj_new = np.asarray(h1['%s/delta_chirp_inj' % ifo][:]).reshape((h1['%s/delta_chirp_inj' % ifo].shape[0],1))
         delta_chirp_inj = np.vstack((delta_chirp_inj, delta_chirp_inj_new))
-        dist_inj_new = np.asarray(h1['H1/dist_inj'][:]).reshape((h1['H1/dist_inj'].shape[0],1))
+        dist_inj_new = np.asarray(h1['%s/dist_inj' % ifo][:]).reshape((h1['%s/dist_inj' % ifo].shape[0],1))
         dist_inj = np.vstack((dist_inj, dist_inj_new))
-        tmp_dur_inj_new = np.asarray(h1['H1/template_duration_inj'][:]).reshape((h1['H1/template_duration_inj'].shape[0],1))
+        tmp_dur_inj_new = np.asarray(h1['%s/template_duration_inj' % ifo][:]).reshape((h1['%s/template_duration_inj' % ifo].shape[0],1))
         tmp_dur_inj = np.vstack((tmp_dur_inj, tmp_dur_inj_new))
 
 #Getting injection weights
@@ -212,40 +241,42 @@ labels_all = np.vstack((c_zero,c_ones))
 
 # define the architecture of the network (sigmoid nodes)
 model = Sequential()
-act = keras.layers.advanced_activations.LeakyReLU(alpha=0.3)
+act = keras.layers.advanced_activations.ELU(alpha=1.0)                         #LeakyReLU(alpha=0.1)
 early_stopping = EarlyStopping(monitor='val_loss', patience=2)
-model.add(Dense(200, input_dim=trig_comb.shape[1]))
+#model.add(Dense(200, input_dim=trig_comb.shape[1]))
+#act
+model.add(Dense(10, input_dim=trig_comb.shape[1]))
 act
 
-#model.add(Dense(25, init='normal', input_dim=6, activation='relu'))
-#model.add(Dense(21, init='normal', activation='relu'))
-#model.add(Dense(21, init='normal', activation='relu'))
+model.add(Dense(7))
+act
+model.add(Dense(3))
+act
+model.add(Dense(3))
+act
+model.add(Dense(3))
+act
+model.add(Dense(3))
+act
 
-#model.add(Dense(3, activation='relu'))
+#model.add(Dense(300))
+#act
+#model.add(Dense(500))
+#act`
 #model.add(Dropout(0.2))
-#model.add(Dense(3, activation='relu'))
-
-
-model.add(Dense(300))
-act
-#model.add(Dropout(0.2))
-model.add(Dense(500))
-act
-model.add(Dropout(0.2))
-model.add(Dense(700))
-act
-#model.add(Dropout(0.2))
-model.add(Dense(500))
-act
-#model.add(Dropout(0.2))
-model.add(Dense(200))
-act
+#model.add(Dense(700))
+#act
+#model.add(Dense(500))
+#act
+#model.add(Dense(200))
+#act
 
 model.add(Dense(1, init='normal', activation='sigmoid'))
 
 #Compiling model
 print("[INFO] compiling model...")
 sgd = SGD(lr=0.05)
+#rms_prop = rmsprop(lr=0.001)
 model.compile(loss="binary_crossentropy", optimizer='rmsprop',
 	metrics=["accuracy","binary_crossentropy"], class_mode='binary')
 
@@ -259,7 +290,7 @@ test_weights = 100.*np.vstack((trig_w_test,inj_test_weight)).flatten()
 
 #model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
 hist = model.fit(train_data, lab_train,
-                    nb_epoch=1000, batch_size=200000,    #66000
+                    nb_epoch=250, batch_size=500000,    #66000
                     sample_weight=train_weights,
                     validation_data=(test_data,lab_test,test_weights),
                     shuffle=True, show_accuracy=True)
@@ -540,6 +571,7 @@ pl.plot(hist.history['loss'])
 pl.title('Loss vs. Epoch')
 pl.xlabel('Epoch')
 pl.ylabel('Loss')
+pl.yscale('log')
 pl.savefig('%s/run_%s/loss_vs_epoch.png' % (out_dir,now))
 pl.close()
 
