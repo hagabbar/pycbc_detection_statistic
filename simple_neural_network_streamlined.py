@@ -48,15 +48,16 @@ def load_back_data(data, params):
 
     for idx,key in enumerate(dict_comb.keys()):
         if idx == 0:
-            trig_comb = dict_comb[key]
+            back_comb = dict_comb[key]
         else:
-            trig_comb = np.hstack((trig_comb,dict_comb[key]))
+            back_comb = np.hstack((back_comb,dict_comb[key]))
 
-    return trig_comb, dict_comb
+    return back_comb, dict_comb
 
 #Load CBC/noise triggers from multiple data sets
 def load_inj_data(data, params, dict_comb):
     tmp_comb = {}
+    inj = {}
     print 'loading injections'
     for fi in data:
         h1 = h5py.File(fi, 'r')
@@ -65,32 +66,34 @@ def load_inj_data(data, params, dict_comb):
             for label in h1['%s' % ifo].keys():
                 for key in params:
                     if label == key:
-                        dict_comb[label+'_inj'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                        dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                        inj[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
         else:
             for label in h1['%s' % ifo].keys():
                 for key in params:
                     if label == key:
-                        tmp_comb[label+'_inj_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                        dict_comb[label+'_inj'] = np.vstack((dict_comb[label+'_inj'], tmp_comb[label+'_inj_new']))
+                        tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                        inj[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
+                        dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
 
-    for idx,key in enumerate(dict_comb.keys()):
+    for idx,key in enumerate(inj.keys()):
         if idx == 0:
-            trig_comb = dict_comb[key]
+            inj_comb = inj[key]
         elif key == 'dist_inj':
             continue
         else:
-            trig_comb = np.hstack((trig_comb,dict_comb[key]))
+            inj_comb = np.hstack((inj_comb,inj[key]))
 
-    return trig_comb, dict_comb
+    return inj_comb, dict_comb
 
 #Generate injection weights
-def inj_weight_calc(inj_comb, dict_comb):
+def inj_weight_calc(dict_comb):
     print 'calculating injection weights'
     inj_weights_pre = []
     np.asarray(inj_weights_pre)
     dist_inj = dict_comb['dist_inj']
     dist_inj_mean = (dist_inj**2).mean()
-    for idx in enumerate(delta_chirp_inj):
+    for idx in enumerate(dict_comb['delta_chirp_inj']):
         idx = idx[0]
         inj_weights_pre.append((dist_inj[idx][0]**2)/dist_inj_mean)
 
@@ -112,7 +115,7 @@ def orig_norm(back_trig, inj_trig, tt_split):
 
     return train_data_p, test_data_p, comb_all
 
-def normalize(comb_all):
+def normalize(trig_comb,comb_all):
     print 'normalizing features'
     marg_l = ((np.log(comb_all[:,0]) - np.log(comb_all[:,0]).mean())/np.log(comb_all[:,0]).max()).reshape((comb_all.shape[0],1))
     count = ((comb_all[:,1] - comb_all[:,1].mean())/comb_all[:,1].max()).reshape((comb_all.shape[0],1))
@@ -126,6 +129,82 @@ def normalize(comb_all):
     comb_all = np.vstack((trig_comb, inj_comb)) 
 
     return trig_comb, inj_comb, comb_all
+
+def costco_label_maker(back_trig, inj_trig, tt_perc):
+    print 'bought a label maker for my nn, it\'s pretty nice'
+    #making labels (zero is noise, one is injection)
+    c_zero = np.zeros((back_trig.shape[0],1))
+    c_z_train = c_zero[:int(back_trig.shape[0]*tt_perc)]
+    c_z_test = c_zero[int(back_trig.shape[0]*tt_perc):int(trig_trig.shape[0])]
+    c_ones = np.ones((int(inj_trig.shape[0]),1))
+    c_o_train = c_ones[:int(inj_trig.shape[0]*tt_perc)]
+    c_o_test = c_ones[int(inj_trig.shape[0]*tt_perc):int(inj_trig.shape[0])]
+    lab_train = np.vstack((c_z_train,c_o_train))
+    lab_test = np.vstack((c_z_test,c_o_test))
+    labels_all = np.vstack((c_zero,c_ones))
+ 
+    return lab_train, lab_test, labels_all
+
+def samp_weight(trig_comb,inj_comb):
+    print 'making sample weights vector'
+    trig_weights = np.zeros((trig_comb.shape[0],1))
+    trig_weights.fill(1/((trig_comb.shape[0])/(inj_comb.shape[0])))
+    trig_w_train = trig_weights[:int(trig_comb.shape[0]*.7)]
+    trig_w_test = trig_weights[int(trig_comb.shape[0]*.7):]
+    train_weights = 100.*np.vstack((trig_w_train,inj_train_weight)).flatten()
+    test_weights = 100.*np.vstack((trig_w_test,inj_test_weight)).flatten()
+
+    return train_weights, test_weights
+
+def the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test):
+    print 'It\'s is alive!!!'
+    model = Sequential()
+    act = keras.layers.advanced_activations.ELU(alpha=1.0)                         #LeakyReLU(alpha=0.1)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=2)
+
+    model.add(Dense(10, input_dim=trig_comb.shape[1]))
+    act
+    model.add(Dense(7))
+    act
+    model.add(Dense(3))
+    act
+    model.add(Dense(3))
+    act
+    model.add(Dense(3))
+    act
+    model.add(Dense(3))
+    act
+
+    model.add(Dense(1, init='normal', activation='sigmoid'))
+
+    #Compiling model
+    print("[INFO] compiling model...")
+    sgd = SGD(lr=0.05)
+    model.compile(loss="binary_crossentropy", optimizer='rmsprop',
+            metrics=["accuracy","binary_crossentropy"], class_mode='binary')
+   
+    #model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
+    hist = model.fit(train_data, lab_train,
+                        nb_epoch=nb_epoch, batch_size=batch_size,    #66000
+                        sample_weight=train_weights,
+                        validation_data=(test_data,lab_test,test_weights),
+                        shuffle=True, show_accuracy=True)
+    print(hist.history) 
+
+    # show the accuracy on the testing set
+    print("[INFO] evaluating on testing set...")
+    eval_results = model.evaluate(test_data, lab_test,
+                                        sample_weight=test_weights,
+                                            batch_size=32, verbose=1)
+    print("[INFO] loss={:.4f}, accuracy: {:.4f}%".format(eval_results[0],
+            eval_results[1] * 100))
+    #Saving prediction probabilities to a variable
+    res_pre = model.predict(test_data)
+
+    #Printing summary of model parameters
+    model.summary()
+
+    return res_pre, eval_results, hist
 
 #Main function
 def main(): 
@@ -149,6 +228,10 @@ def main():
             help="path to output directory")
     ap.add_argument("-t", "--train_perc", required=True,
             help="Percentage of triggers you want to train. Remaining percentage will be set aside for testing")
+    ap.add_argument("-e", "--nb_epoch", required=True,
+            help="Number of Epochs")
+    ap.add_argument("-bs", "--batch_size", required=True,
+            help="Batch size for the training process (e.g. number of samples to introduce to network at any given epoch)")
     args = vars(ap.parse_args())
 
     #Initializing parameters
@@ -156,23 +239,36 @@ def main():
     back_files = args['back_dataset'].split(',')
     out_dir = args['output_dir']
     back_params = ['marg_l','count','maxnewsnr','maxsnr','time','ratio_chirp','delT','delta_chirp','template_duration']
-    inj_params = ['marg_l','count','maxnewsnr','maxsnr','time','ratio_chirp','delT','delta_chirp','dist_inj','template_duration']
+    inj_params = ['marg_l_inj','count_inj','maxnewsnr_inj','maxsnr_inj','time_inj','ratio_chirp_inj','delT_inj','delta_chirp_inj','dist_inj','template_duration_inj']
     tt_split = float(args['train_perc'])
+    nb_epoch = int(args['nb_epoch'])
+    batch_size = int(args['batch_size'])
 
     #Downloading background and injection triggers
     back_trig, dict_comb = load_back_data(back_files, back_params)
     inj_trig, dict_comb = load_inj_data(data_files, inj_params, dict_comb)
    
     #Getting injection weights for later use in neural network training process
-    inj_weights = inj_weight_calc(inj_trig, dict_comb)
+    inj_weights = inj_weight_calc(dict_comb)
 
     #Storing original trigger feature values prior to normalization
     train_data_p, test_data_p, comb_all = orig_norm(back_trig, inj_trig, tt_split)    
 
     #Normalizin features from zero to one
-    trig_comb, inj_comb, comb_all = normalize(comb_all)
+    back_trig, inj_trig, comb_all = normalize(back_trig, comb_all)
 
+    #Randomizing the order of the background triggers
+    indices_trig = np.random.permutation(back_trig.shape[0])
 
+    #making labels (zero is noise, one is injection)...better label maker than one you could buy at costco in my opinion
+    lab_train, lab_test, labels_all = costco_label_maker(back_trig, inj_trig, tt_split)
+
+    #Creating sample weights vector
+    train_weights, test_weights = samp_weight(back_trig, inj_trig)
+
+    #training/testing on deep neural network
+    the_machine(nb_epoch, batch_size, train_weights, test_weights)
+    
     
 if __name__ == '__main__':
-    back_trig, inj_trig = main()
+    main()
