@@ -65,7 +65,6 @@ def load_back_data(data, params):
        
         else:
             back_comb = np.hstack((back_comb,back[key]))
-    print back_comb
     return back_comb, dict_comb
 
 #Load CBC/noise triggers from multiple data sets
@@ -105,7 +104,6 @@ def load_inj_data(data, params, dict_comb):
             inj_comb = inj[key]
         else:
             inj_comb = np.hstack((inj_comb,inj[key]))
-    print inj_comb
     return inj_comb, dict_comb
 
 #Generate injection weights
@@ -254,9 +252,6 @@ def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, tr
 def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now):
     print 'generating ROC curve plot'
     n_noise = len(trig_test)
-    #Assert that length of inj weights and injection parameters are the same
-    assert len(inj_weight) == len(inj_param)    
-
     pred_prob = model.predict_proba(test_data, batch_size=32).T[0]
     prob_sort_noise = pred_prob[pred_prob[0:n_noise].argsort()][::-1]
     prob_sort_inj = pred_prob[n_noise:][pred_prob[n_noise:].argsort()][::-1]
@@ -269,8 +264,6 @@ def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out
     class_sort = pred_class[pred_prob[:].argsort()][::-1]
     orig_test_labels = lab_test[pred_prob[:].argsort()][::-1]
 
-    #Assert that length of inj weights and injection parameters are the same
-    assert len(inj_weight) == len(inj_param)
 
     #Initialize variables/arrays
     FAP = []
