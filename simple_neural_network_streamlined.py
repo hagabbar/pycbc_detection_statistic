@@ -29,6 +29,7 @@ import unicodedata
 def load_back_data(data, params):
     print 'loading background triggers'
     dict_comb = {}
+    back = {}
     tmp_comb = {}
     h1 = h5py.File(data[0], 'r')
     for fi in data:
@@ -38,20 +39,33 @@ def load_back_data(data, params):
             for label in h1['%s' % ifo].keys():
                 for key in params:
                     if label == key:
-                        dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                        if key == 'delta_chirp' or key == 'time':
+                            dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                        else:
+                            dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                            back[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
         else:
             for label in h1['%s' % ifo].keys():
                 for key in params:
                     if label == key:
-                        tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                        dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
+                        if key == 'delta_chirp' or key == 'time':
+                            tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                            dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
+                        else:                   
+                            tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                            back[label] = np.vstack((back[label], tmp_comb[label+'_new']))
+                            dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
 
-    for idx,key in enumerate(dict_comb.keys()):
-        if idx == 0:
-            back_comb = dict_comb[key]
+    for idx,key in enumerate(params):
+        print params
+        if key == 'delta_chirp' or key == 'time':
+            continue
+        elif idx == 0:
+            back_comb = back[key]
+       
         else:
-            back_comb = np.hstack((back_comb,dict_comb[key]))
-
+            back_comb = np.hstack((back_comb,back[key]))
+    print back_comb
     return back_comb, dict_comb
 
 #Load CBC/noise triggers from multiple data sets
@@ -66,24 +80,32 @@ def load_inj_data(data, params, dict_comb):
             for label in h1['%s' % ifo].keys():
                 for key in params:
                     if label == key:
-                        dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                        inj[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                        if key == 'delta_chirp_inj' or key == 'time_inj' or key == 'dist_inj':
+                            dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                        else:
+                            dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                            inj[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
         else:
             for label in h1['%s' % ifo].keys():
                 for key in params:
                     if label == key:
-                        tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                        inj[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
+                        if key == 'delta_chirp_inj' or key == 'time_inj' or key == 'dist_inj':
+                            tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                            dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
+                        else:
+                            tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+                            inj[label] = np.vstack((inj[label], tmp_comb[label+'_new']))
                         dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
 
-    for idx,key in enumerate(inj.keys()):
-        if idx == 0:
-            inj_comb = inj[key]
-        elif key == 'dist_inj':
+    for idx,key in enumerate(params):
+        print params
+        if key  == 'delta_chirp_inj' or key == 'time_inj' or key == 'dist_inj':
             continue
+        elif idx == 0:
+            inj_comb = inj[key]
         else:
             inj_comb = np.hstack((inj_comb,inj[key]))
-
+    print inj_comb
     return inj_comb, dict_comb
 
 #Generate injection weights
@@ -115,7 +137,7 @@ def orig_norm(back_trig, inj_trig, tt_split):
 
     return train_data_p, test_data_p, comb_all
 
-def sep(trig_comb,inj_comb,tt_split):
+def sep(trig_comb,inj_comb,indices_trig,tt_split, inj_weights):
     print 'seperating into training/testing sets'
     trig_train_idx, trig_test_idx = indices_trig[:int(trig_comb.shape[0]*tt_split)], indices_trig[int(trig_comb.shape[0]*tt_split):int(trig_comb.shape[0])]
     trig_train, trig_test = trig_comb[trig_train_idx,:], trig_comb[trig_test_idx,:]
@@ -128,7 +150,7 @@ def sep(trig_comb,inj_comb,tt_split):
     train_data = train_data
     test_data = test_data
 
-    return train_data, test_data, trig_test, inj_test, inj_test_weight
+    return train_data, test_data, trig_test, inj_test, inj_test_weight, inj_train_weight
 
 def normalize(trig_comb,comb_all):
     print 'normalizing features'
@@ -150,7 +172,7 @@ def costco_label_maker(back_trig, inj_trig, tt_perc):
     #making labels (zero is noise, one is injection)
     c_zero = np.zeros((back_trig.shape[0],1))
     c_z_train = c_zero[:int(back_trig.shape[0]*tt_perc)]
-    c_z_test = c_zero[int(back_trig.shape[0]*tt_perc):int(trig_trig.shape[0])]
+    c_z_test = c_zero[int(back_trig.shape[0]*tt_perc):int(back_trig.shape[0])]
     c_ones = np.ones((int(inj_trig.shape[0]),1))
     c_o_train = c_ones[:int(inj_trig.shape[0]*tt_perc)]
     c_o_test = c_ones[int(inj_trig.shape[0]*tt_perc):int(inj_trig.shape[0])]
@@ -160,7 +182,7 @@ def costco_label_maker(back_trig, inj_trig, tt_perc):
  
     return lab_train, lab_test, labels_all
 
-def samp_weight(trig_comb,inj_comb):
+def samp_weight(trig_comb,inj_comb,inj_train_weight,inj_test_weight):
     print 'making sample weights vector'
     trig_weights = np.zeros((trig_comb.shape[0],1))
     trig_weights.fill(1/((trig_comb.shape[0])/(inj_comb.shape[0])))
@@ -171,7 +193,7 @@ def samp_weight(trig_comb,inj_comb):
 
     return train_weights, test_weights
 
-def the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now):
+def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now):
     print 'It\'s is alive!!!'
     model = Sequential()
     act = keras.layers.advanced_activations.ELU(alpha=1.0)                         #LeakyReLU(alpha=0.1)
@@ -230,6 +252,7 @@ def the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, t
 
 #Function to compute ROC curve for both newsnr and some other score value
 def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now):
+    print 'generating ROC curve plot'
     n_noise = len(trig_test)
     #Assert that length of inj weights and injection parameters are the same
     assert len(inj_weight) == len(inj_param)    
@@ -292,6 +315,7 @@ def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out
 
 #Function to compute ROC cruve given any weight and score. Not currently used, but could be used later if desired
 def ROC(inj_weight, inj_param, noise_param, out_dir, now):
+    print 'generating ROC curve plot'
     #Assert that length of inj weights and injection parameters are the same
     assert len(inj_weight) == len(inj_param)
     
@@ -331,6 +355,7 @@ def ROC(inj_weight, inj_param, noise_param, out_dir, now):
 
 def main_plotter(out_dir, now, test_data_p, params, back_test, hist):
     #Loss vs. Epoch
+    print 'plotting loss vs. epoch'
     pl.plot(hist.history['loss'])
     pl.title('Loss vs. Epoch')
     pl.xlabel('Epoch')
@@ -340,6 +365,7 @@ def main_plotter(out_dir, now, test_data_p, params, back_test, hist):
     pl.close()
 
     #Accuracy vs. Epoch
+    print 'plotting accuracy vs. epoch'
     pl.plot(hist.history['acc'])
     pl.title('Accuracy vs. Epoch')
     pl.xlabel('Epoch')
@@ -348,6 +374,7 @@ def main_plotter(out_dir, now, test_data_p, params, back_test, hist):
     pl.close()
 
     for idx,label in enumerate(params):
+        print('plotting score vs. %s' % label)
         pl.scatter(test_data_p[0:n_noise,idx],pred_prob[0:n_noise],marker="o",label='background')
         pl.scatter(test_data_p[n_noise:,idx],pred_prob[n_noise:],marker="^",label='injection')
         pl.legend(frameon=True)
@@ -357,6 +384,7 @@ def main_plotter(out_dir, now, test_data_p, params, back_test, hist):
         pl.savefig('%s/run_%s/score_vs_%s.png' % (out_dir,now,label))
         pl.close()
 
+        print('plotting %s histogram' % label)
         pl.hist(test_data_p[0:n_noise,idx], 50, label='background')
         pl.hist(test_data_p[n_noise:,idx], 50, label='injection')
         pl.legend(frameon=True)
@@ -366,12 +394,13 @@ def main_plotter(out_dir, now, test_data_p, params, back_test, hist):
         pl.close()
 
         for idx2,label2 in enumerate(params):
+             print('plotting %s vs. %s' (label2,label))
              pl.scatter(test_data_p[0:n_noise,idx],test_data_p[0:n_noise,idx2],c=pred_prob[0:n_noise],marker="o",label='background')
              pl.scatter(test_data_p[n_noise:,idx],test_data_p[n_noise:,idx2],c=pred_prob[n_noise:],marker="^",label='injection')
              pl.legend(frameon=True)
-             pl.title('%s vs. %s' % (idx2,idx))
-             pl.xlabel('%s' % idx)
-             pl.ylabel('%s' idx2)
+             pl.title('%s vs. %s' % (label2,label))
+             pl.xlabel('%s' % label)
+             pl.ylabel('%s' % label2)
              pl.colorbar()
              pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,idx2,idx))
              pl.close() 
@@ -409,8 +438,8 @@ def main():
     back_files = args['back_dataset'].split(',')
     out_dir = args['output_dir']
     now = datetime.datetime.now()       #Get current time for time stamp labels
-    back_params = ['marg_l','count','maxnewsnr','maxsnr','time','ratio_chirp','delT','delta_chirp','template_duration']
-    inj_params = ['marg_l_inj','count_inj','maxnewsnr_inj','maxsnr_inj','time_inj','ratio_chirp_inj','delT_inj','delta_chirp_inj','dist_inj','template_duration_inj']
+    back_params = ['marg_l','count','maxnewsnr','maxsnr','ratio_chirp','delT','template_duration','delta_chirp','time']
+    inj_params = ['marg_l_inj','count_inj','maxnewsnr_inj','maxsnr_inj','ratio_chirp_inj','delT_inj','template_duration_inj','dist_inj','delta_chirp_inj','time_inj']
     tt_split = float(args['train_perc'])
     nb_epoch = int(args['nb_epoch'])
     batch_size = int(args['batch_size'])
@@ -418,30 +447,30 @@ def main():
     #Downloading background and injection triggers
     back_trig, dict_comb = load_back_data(back_files, back_params)
     inj_trig, dict_comb = load_inj_data(data_files, inj_params, dict_comb)
-   
+
     #Getting injection weights for later use in neural network training process
     inj_weights = inj_weight_calc(dict_comb)
 
     #Storing original trigger feature values prior to normalization
     train_data_p, test_data_p, comb_all = orig_norm(back_trig, inj_trig, tt_split)    
 
-    #Normalizin features from zero to one
+    #Normalizing features from zero to one
     back_trig, inj_trig, comb_all = normalize(back_trig, comb_all)
 
     #Randomizing the order of the background triggers
     indices_trig = np.random.permutation(back_trig.shape[0])
 
     #Seperating into training/testing sets
-    train_data, test_data, back_test, inj_test, inj_test_weight = sep(back_trig, inj_trig, tt_split)
+    train_data, test_data, back_test, inj_test, inj_test_weight, inj_train_weight = sep(back_trig, inj_trig, indices_trig, tt_split, inj_weights)
 
     #making labels (zero is noise, one is injection)...better label maker than one you could buy at costco in my opinion
     lab_train, lab_test, labels_all = costco_label_maker(back_trig, inj_trig, tt_split)
 
     #Creating sample weights vector
-    train_weights, test_weights = samp_weight(back_trig, inj_trig)
+    train_weights, test_weights = samp_weight(back_trig, inj_trig, inj_train_weight, inj_test_weight)
 
     #training/testing on deep neural network
-    res_pre, eval_results, hist = the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
+    res_pre, eval_results, hist = the_machine(back_trig, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
     
     #Compute the ROC curve
     ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC(back_test,test_data,inj_test_weight,inj_test,lab_test)
@@ -458,5 +487,6 @@ def main():
         hf.create_dataset('train_data', data=train_data)
         hf.create_dataset('ROC_newsnr_sum', data=ROC_newsnr_sum)
 
+    print 'and...presto! You\'re done!'
 if __name__ == '__main__':
     main()
