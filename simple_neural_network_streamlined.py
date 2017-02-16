@@ -222,6 +222,7 @@ def the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, t
     #Saving model to hdf file for later use
     os.makedirs('%s/run_%s' % (out_dir,now))
     os.makedirs('%s/run_%s/colored_plots' % (out_dir,now))
+    os.makedirs('%s/run_%s/histograms' % (out_dir,now))
     model.save('%s/run_%s/nn_model.hdf' % (out_dir,now))
     np.save('%s/run_%s/hist.npy' % (out_dir,now), hist.history)
 
@@ -328,33 +329,7 @@ def ROC(inj_weight, inj_param, noise_param, out_dir, now):
 
     return ROC_sum, FAP
 
-def score_plotter(out_dir, now, test_data_p, params, back_test):
-    n_noise = len(back_test)
-    for idx,label in enumerate(params):
-        pl.scatter(test_data_p[0:n_noise,idx],pred_prob[0:n_noise],marker="o",label='background')
-        pl.scatter(test_data_p[n_noise:,idx],pred_prob[n_noise:],marker="^",label='injection')
-        pl.legend(frameon=True)
-        pl.title('Score vs. %s' % label)
-        pl.ylabel('Score')
-        pl.xlabel('%s' % label)
-        pl.savefig('%s/run_%s/score_vs_%s.png' % (out_dir,now,label))
-        pl.close()
-
-def colored_plotter(out_dir, now, test_data_p, params, back_test):
-    n_noise = len(back_test)
-    for idx,label in enumerate(params):
-        for idx2,label2 in enumerate(params):
-             pl.scatter(test_data_p[0:n_noise,idx],test_data_p[0:n_noise,idx2],c=pred_prob[0:n_noise],marker="o",label='background')
-             pl.scatter(test_data_p[n_noise:,idx],test_data_p[n_noise:,idx2],c=pred_prob[n_noise:],marker="^",label='injection')
-             pl.legend(frameon=True)
-             pl.title('%s vs. %s' % (idx2,idx))
-             pl.xlabel('%s' % idx)
-             pl.ylabel('%s' idx2)
-             pl.colorbar()
-             pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,idx2,idx))
-             pl.close() 
-
-def epoch_plotter(out_dir,now,hist.history):
+def main_plotter(out_dir, now, test_data_p, params, back_test, hist):
     #Loss vs. Epoch
     pl.plot(hist.history['loss'])
     pl.title('Loss vs. Epoch')
@@ -372,6 +347,34 @@ def epoch_plotter(out_dir,now,hist.history):
     pl.savefig('%s/run_%s/acc_vs_epoch.png' % (out_dir,now))
     pl.close()
 
+    for idx,label in enumerate(params):
+        pl.scatter(test_data_p[0:n_noise,idx],pred_prob[0:n_noise],marker="o",label='background')
+        pl.scatter(test_data_p[n_noise:,idx],pred_prob[n_noise:],marker="^",label='injection')
+        pl.legend(frameon=True)
+        pl.title('Score vs. %s' % label)
+        pl.ylabel('Score')
+        pl.xlabel('%s' % label)
+        pl.savefig('%s/run_%s/score_vs_%s.png' % (out_dir,now,label))
+        pl.close()
+
+        pl.hist(test_data_p[0:n_noise,idx], 50, label='background')
+        pl.hist(test_data_p[n_noise:,idx], 50, label='injection')
+        pl.legend(frameon=True)
+        pl.title('%s histogram' % label)
+        pl.xlabel('%s' % label)
+        pl.savefig('%s/run_%s/histograms/%s.png' % (out_dir,now,label))
+        pl.close()
+
+        for idx2,label2 in enumerate(params):
+             pl.scatter(test_data_p[0:n_noise,idx],test_data_p[0:n_noise,idx2],c=pred_prob[0:n_noise],marker="o",label='background')
+             pl.scatter(test_data_p[n_noise:,idx],test_data_p[n_noise:,idx2],c=pred_prob[n_noise:],marker="^",label='injection')
+             pl.legend(frameon=True)
+             pl.title('%s vs. %s' % (idx2,idx))
+             pl.xlabel('%s' % idx)
+             pl.ylabel('%s' idx2)
+             pl.colorbar()
+             pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,idx2,idx))
+             pl.close() 
 
 #Main function
 def main(): 
@@ -443,14 +446,8 @@ def main():
     #Compute the ROC curve
     ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC(back_test,test_data,inj_test_weight,inj_test,lab_test)
 
-    #Score plots
-    score_plotter(out_dir, now, test_data_p, params, back_test)
-
-    #colored plots
-    colored_plotter(out_dir, now, test_data_p, params, back_test)
- 
-    #Accuracy and loss plots
-    epoch_plotter(out_dir, now, hist)
+    #Score/histogram plots
+    main_plotter(out_dir, now, test_data_p, params, back_test, hist)
 
     #Write data to an hdf file
     with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
