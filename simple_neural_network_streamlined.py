@@ -275,9 +275,9 @@ def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out
     np.array(ROC_newsnr_sum)
     np.array(ROC_newsnr)
 
-    for idx in range(len(noise_param)):
+    for idx in range(n_noise):
         #Calculate false alarm probability value
-        FAP.append((float(idx+1))/len(noise_param))
+        FAP.append((float(idx+1))/n_noise)
 
         #Compute sum
         w_sum = prob_sort_injWeight[prob_sort_inj >= prob_sort_noise[idx]].sum()
