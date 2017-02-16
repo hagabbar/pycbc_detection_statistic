@@ -309,8 +309,6 @@ def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out
 #Function to compute ROC cruve given any weight and score. Not currently used, but could be used later if desired
 def ROC(inj_weight, inj_param, noise_param, out_dir, now):
     print 'generating ROC curve plot'
-    #Assert that length of inj weights and injection parameters are the same
-    assert len(inj_weight) == len(inj_param)
     
     #Initialize variables/arrays
     ROC_value = 0
@@ -466,7 +464,7 @@ def main():
     res_pre, eval_results, hist = the_machine(back_trig, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
     
     #Compute the ROC curve
-    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC(back_test,test_data,inj_test_weight,inj_test,lab_test)
+    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC_inj_and_newsnr(back_test,test_data,inj_test_weight,inj_test,lab_test)
 
     #Score/histogram plots
     main_plotter(out_dir, now, test_data_p, params, back_test, hist)
