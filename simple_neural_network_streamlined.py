@@ -266,14 +266,11 @@ def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out
 
 
     #Initialize variables/arrays
+    w_sum = 0
+    newsnr_sum = 0
     FAP = []
     ROC_w_sum = []
     ROC_newsnr_sum = []
-    ROC_newsnr = []
-    np.array(FAP)
-    np.array(ROC_w_sum)
-    np.array(ROC_newsnr_sum)
-    np.array(ROC_newsnr)
 
     for idx in range(n_noise):
         #Calculate false alarm probability value
@@ -282,16 +279,16 @@ def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out
         #Compute sum
         w_sum = prob_sort_injWeight[prob_sort_inj >= prob_sort_noise[idx]].sum()
         newsnr_sum = newsnr_sort_injWeight[newsnr_sort_injNewsnr >= newsnr_sort_noiseNewsnr[idx]].sum()
-
+      
         #Append
         ROC_w_sum.append(w_sum)
         ROC_newsnr_sum.append(newsnr_sum)
 
-        #Normalize ROC y axis
-        ROC_w_sum = np.asarray(ROC_w_sum)
-        ROC_w_sum *= (1.0/ROC_w_sum.max())
-        ROC_newsnr_sum = np.asarray(ROC_newsnr_sum)
-        ROC_newsnr_sum *= (1.0/ROC_newsnr_sum.max())
+    #Normalize ROC y axis
+    ROC_w_sum = np.asarray(ROC_w_sum)
+    ROC_w_sum *= (1.0/ROC_w_sum.max())
+    ROC_newsnr_sum = np.asarray(ROC_newsnr_sum)
+    ROC_newsnr_sum *= (1.0/ROC_newsnr_sum.max())
         
     #Plot ROC Curve
     pl.plot(FAP,ROC_w_sum,label='NN Score')
@@ -344,7 +341,8 @@ def ROC(inj_weight, inj_param, noise_param, out_dir, now):
 
     return ROC_sum, FAP
 
-def main_plotter(out_dir, now, test_data_p, params, back_test, hist):
+def main_plotter(out_dir, now, test_data_p, params, back_test, hist, trig_test, pred_prob):
+    n_noise = len(trig_test)
     #Loss vs. Epoch
     print 'plotting loss vs. epoch'
     pl.plot(hist.history['loss'])
@@ -364,36 +362,36 @@ def main_plotter(out_dir, now, test_data_p, params, back_test, hist):
     pl.savefig('%s/run_%s/acc_vs_epoch.png' % (out_dir,now))
     pl.close()
 
-    for idx,label in enumerate(params):
-        print('plotting score vs. %s' % label)
+    for idx,lab in enumerate(params):
+        print('plotting score vs. %s' % lab)
         pl.scatter(test_data_p[0:n_noise,idx],pred_prob[0:n_noise],marker="o",label='background')
         pl.scatter(test_data_p[n_noise:,idx],pred_prob[n_noise:],marker="^",label='injection')
         pl.legend(frameon=True)
-        pl.title('Score vs. %s' % label)
+        pl.title('Score vs. %s' % lab)
         pl.ylabel('Score')
-        pl.xlabel('%s' % label)
-        pl.savefig('%s/run_%s/score_vs_%s.png' % (out_dir,now,label))
+        pl.xlabel('%s' % lab)
+        pl.savefig('%s/run_%s/score_vs_%s.png' % (out_dir,now,lab))
         pl.close()
 
-        print('plotting %s histogram' % label)
+        print('plotting %s histogram' % lab)
         pl.hist(test_data_p[0:n_noise,idx], 50, label='background')
         pl.hist(test_data_p[n_noise:,idx], 50, label='injection')
         pl.legend(frameon=True)
-        pl.title('%s histogram' % label)
-        pl.xlabel('%s' % label)
-        pl.savefig('%s/run_%s/histograms/%s.png' % (out_dir,now,label))
+        pl.title('%s histogram' % lab)
+        pl.xlabel('%s' % lab)
+        pl.savefig('%s/run_%s/histograms/%s.png' % (out_dir,now,lab))
         pl.close()
 
-        for idx2,label2 in enumerate(params):
-             print('plotting %s vs. %s' (label2,label))
+        for idx2,lab2 in enumerate(params):
+             print('plotting %s vs. %s' % (lab2,lab))
              pl.scatter(test_data_p[0:n_noise,idx],test_data_p[0:n_noise,idx2],c=pred_prob[0:n_noise],marker="o",label='background')
              pl.scatter(test_data_p[n_noise:,idx],test_data_p[n_noise:,idx2],c=pred_prob[n_noise:],marker="^",label='injection')
              pl.legend(frameon=True)
-             pl.title('%s vs. %s' % (label2,label))
-             pl.xlabel('%s' % label)
-             pl.ylabel('%s' % label2)
+             pl.title('%s vs. %s' % (lab2,lab))
+             pl.xlabel('%s' % lab)
+             pl.ylabel('%s' % lab2)
              pl.colorbar()
-             pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,idx2,idx))
+             pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,lab2,lab))
              pl.close() 
 
 #Main function
@@ -467,7 +465,7 @@ def main():
     ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC_inj_and_newsnr(back_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model)
 
     #Score/histogram plots
-    main_plotter(out_dir, now, test_data_p, params, back_test, hist)
+    main_plotter(out_dir, now, test_data_p, back_params[:len(back_params)-2], back_test, hist, back_test, pred_prob)
 
     #Write data to an hdf file
     with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
