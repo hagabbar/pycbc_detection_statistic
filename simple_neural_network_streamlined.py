@@ -464,7 +464,7 @@ def main():
     res_pre, eval_results, hist = the_machine(back_trig, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
     
     #Compute the ROC curve
-    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC_inj_and_newsnr(back_test,test_data,inj_test_weight,inj_test,lab_test)
+    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC_inj_and_newsnr(back_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now)
 
     #Score/histogram plots
     main_plotter(out_dir, now, test_data_p, params, back_test, hist)
