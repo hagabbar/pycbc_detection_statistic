@@ -246,10 +246,10 @@ def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, tr
     model.save('%s/run_%s/nn_model.hdf' % (out_dir,now))
     np.save('%s/run_%s/hist.npy' % (out_dir,now), hist.history)
 
-    return res_pre, eval_results, hist
+    return res_pre, eval_results, hist, model
 
 #Function to compute ROC curve for both newsnr and some other score value
-def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now):
+def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model):
     print 'generating ROC curve plot'
     n_noise = len(trig_test)
     pred_prob = model.predict_proba(test_data, batch_size=32).T[0]
@@ -461,10 +461,10 @@ def main():
     train_weights, test_weights = samp_weight(back_trig, inj_trig, inj_train_weight, inj_test_weight)
 
     #training/testing on deep neural network
-    res_pre, eval_results, hist = the_machine(back_trig, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
+    res_pre, eval_results, hist, model = the_machine(back_trig, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
     
     #Compute the ROC curve
-    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC_inj_and_newsnr(back_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now)
+    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC_inj_and_newsnr(back_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model)
 
     #Score/histogram plots
     main_plotter(out_dir, now, test_data_p, params, back_test, hist)
