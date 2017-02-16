@@ -115,6 +115,21 @@ def orig_norm(back_trig, inj_trig, tt_split):
 
     return train_data_p, test_data_p, comb_all
 
+def sep(trig_comb,inj_comb,tt_split):
+    print 'seperating into training/testing sets'
+    trig_train_idx, trig_test_idx = indices_trig[:int(trig_comb.shape[0]*tt_split)], indices_trig[int(trig_comb.shape[0]*tt_split):int(trig_comb.shape[0])]
+    trig_train, trig_test = trig_comb[trig_train_idx,:], trig_comb[trig_test_idx,:]
+    indices_inj = np.random.permutation(inj_comb.shape[0])
+    inj_train_idx, inj_test_idx = indices_inj[:int(inj_comb.shape[0]*tt_split)], indices_inj[int(inj_comb.shape[0]*tt_split):]
+    inj_train_weight, inj_test_weight = inj_weights[inj_train_idx,:], inj_weights[inj_test_idx,:]
+    inj_train, inj_test = inj_comb[inj_train_idx,:], inj_comb[inj_test_idx,:]
+    train_data = np.vstack((trig_train, inj_train))
+    test_data = np.vstack((trig_test, inj_test))
+    train_data = train_data
+    test_data = test_data
+
+    return train_data, test_data, trig_test, inj_test, inj_test_weight
+
 def normalize(trig_comb,comb_all):
     print 'normalizing features'
     marg_l = ((np.log(comb_all[:,0]) - np.log(comb_all[:,0]).mean())/np.log(comb_all[:,0]).max()).reshape((comb_all.shape[0],1))
@@ -206,6 +221,90 @@ def the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, t
 
     return res_pre, eval_results, hist
 
+#Function to compute ROC curve for both newsnr and some other score value
+def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test):
+    n_noise = len(trig_test)
+    #Assert that length of inj weights and injection parameters are the same
+    assert len(inj_weight) == len(inj_param)    
+
+    pred_prob = model.predict_proba(test_data, batch_size=32).T[0]
+    prob_sort_noise = pred_prob[pred_prob[0:n_noise].argsort()][::-1]
+    prob_sort_inj = pred_prob[n_noise:][pred_prob[n_noise:].argsort()][::-1]
+    prob_sort_injWeight = inj_test_weight.T[0][pred_prob[n_noise:].argsort()][::-1]
+    prob_sort_injNewsnr = inj_test[:,2][pred_prob[n_noise:].argsort()][::-1]
+    newsnr_sort_noiseNewsnr = trig_test[:,2][trig_test[:,2][0:].argsort()][::-1]
+    newsnr_sort_injNewsnr = inj_test[:,2][inj_test[:,2][0:].argsort()][::-1]
+    newsnr_sort_injWeight = inj_test_weight.T[0][inj_test[:,2][0:].argsort()][::-1]
+    pred_class = model.predict_classes(test_data)
+    class_sort = pred_class[pred_prob[:].argsort()][::-1]
+    orig_test_labels = lab_test[pred_prob[:].argsort()][::-1]
+
+    #Assert that length of inj weights and injection parameters are the same
+    assert len(inj_weight) == len(inj_param)
+
+    #Initialize variables/arrays
+    FAP = []
+    ROC_w_sum = []
+    ROC_newsnr_sum = []
+    ROC_newsnr = []
+    np.array(FAP)
+    np.array(ROC_w_sum)
+    np.array(ROC_newsnr_sum)
+    np.array(ROC_newsnr)
+
+    for idx in range(len(noise_param)):
+        #Calculate false alarm probability value
+        FAP.append((float(idx+1))/len(noise_param))
+
+        #Compute sum
+        w_sum = prob_sort_injWeight[prob_sort_inj >= prob_sort_noise[idx]].sum()
+        newsnr_sum = newsnr_sort_injWeight[newsnr_sort_injNewsnr >= newsnr_sort_noiseNewsnr[idx]].sum()
+
+        #Append
+        ROC_w_sum.append(w_sum)
+        ROC_newsnr_sum.append(newsnr_sum)
+
+        #Normalize ROC y axis
+        ROC_w_sum = np.asarray(ROC_w_sum)
+        ROC_w_sum *= (1.0/ROC_w_sum.max())
+        ROC_newsnr_sum = np.asarray(ROC_newsnr_sum)
+        ROC_newsnr_sum *= (1.0/ROC_newsnr_sum.max())
+        
+
+    return ROC_w_sum, ROC_newsnr_sum, FAP
+
+#Function to compute ROC cruve given any weight and score. Not currently used, but could be used later if desired
+def ROC(inj_weight, inj_param, noise_param):
+    #Assert that length of inj weights and injection parameters are the same
+    assert len(inj_weight) == len(inj_param)
+    
+    #Initialize variables/arrays
+    ROC_value = 0
+    FAP = []
+    np.array(FAP)
+    ROC_sum = []
+    np.array(ROC_sum)
+
+    for idx in range(len(noise_param)):
+        #Calculate false alarm probability value
+        FAP.append((float(idx+1))/len(noise_param))
+
+        #Compute sum
+        ROC_value = inj_weight[inj_param >= noise_param[idx]].sum()
+
+        #Append
+        ROC_sum.append(ROC_value)
+
+        #Normalize ROC y axis
+        ROC_sum = np.asarray(ROC_sum)
+        ROC_sum *= (1.0/ROC_sum.max())
+
+
+    return ROC_sum, FAP
+
+def plotter():
+
+
 #Main function
 def main(): 
     #Configure tensorflow to use gpu memory as needed
@@ -260,6 +359,9 @@ def main():
     #Randomizing the order of the background triggers
     indices_trig = np.random.permutation(back_trig.shape[0])
 
+    #Seperating into training/testing sets
+    train_data, test_data, back_test, inj_test, inj_test_weight = sep(back_trig, inj_trig, tt_split)
+
     #making labels (zero is noise, one is injection)...better label maker than one you could buy at costco in my opinion
     lab_train, lab_test, labels_all = costco_label_maker(back_trig, inj_trig, tt_split)
 
@@ -267,8 +369,10 @@ def main():
     train_weights, test_weights = samp_weight(back_trig, inj_trig)
 
     #training/testing on deep neural network
-    the_machine(nb_epoch, batch_size, train_weights, test_weights)
+    res_pre, eval_results, hist = the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test)
     
+    #Compute the ROC curve
+    ROC_w_sum, ROC_newsnr_sum, FAP = ROC(back_test,test_data,inj_test_weight,inj_test,lab_test)
     
 if __name__ == '__main__':
     main()
