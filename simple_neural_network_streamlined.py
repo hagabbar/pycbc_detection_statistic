@@ -171,7 +171,7 @@ def samp_weight(trig_comb,inj_comb):
 
     return train_weights, test_weights
 
-def the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test):
+def the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now):
     print 'It\'s is alive!!!'
     model = Sequential()
     act = keras.layers.advanced_activations.ELU(alpha=1.0)                         #LeakyReLU(alpha=0.1)
@@ -219,10 +219,16 @@ def the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, t
     #Printing summary of model parameters
     model.summary()
 
+    #Saving model to hdf file for later use
+    os.makedirs('%s/run_%s' % (out_dir,now))
+    os.makedirs('%s/run_%s/colored_plots' % (out_dir,now))
+    model.save('%s/run_%s/nn_model.hdf' % (out_dir,now))
+    np.save('%s/run_%s/hist.npy' % (out_dir,now), hist.history)
+
     return res_pre, eval_results, hist
 
 #Function to compute ROC curve for both newsnr and some other score value
-def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test):
+def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now):
     n_noise = len(trig_test)
     #Assert that length of inj weights and injection parameters are the same
     assert len(inj_weight) == len(inj_param)    
@@ -270,11 +276,21 @@ def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test):
         ROC_newsnr_sum = np.asarray(ROC_newsnr_sum)
         ROC_newsnr_sum *= (1.0/ROC_newsnr_sum.max())
         
+    #Plot ROC Curve
+    pl.plot(FAP,ROC_w_sum,label='NN Score')
+    pl.plot(FAP,ROC_newsnr_sum,label='New SNR')
+    pl.legend(frameon=True)
+    pl.title('ROC Curve')
+    pl.xlabel('False Alarm Probability')
+    pl.ylabel('Weighted Sum')
+    pl.xscale('log')
+    pl.savefig('%s/run_%s/ROC_curve.png' % (out_dir,now))
+    pl.close()
 
-    return ROC_w_sum, ROC_newsnr_sum, FAP
+    return ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob
 
 #Function to compute ROC cruve given any weight and score. Not currently used, but could be used later if desired
-def ROC(inj_weight, inj_param, noise_param):
+def ROC(inj_weight, inj_param, noise_param, out_dir, now):
     #Assert that length of inj weights and injection parameters are the same
     assert len(inj_weight) == len(inj_param)
     
@@ -299,10 +315,62 @@ def ROC(inj_weight, inj_param, noise_param):
         ROC_sum = np.asarray(ROC_sum)
         ROC_sum *= (1.0/ROC_sum.max())
 
+    #Plot ROC Curve
+    pl.plot(FAP,ROC_sum,label='Score')
+    pl.legend(frameon=True)
+    pl.title('ROC Curve')
+    pl.xlabel('False Alarm Probability')
+    pl.ylabel('Weighted Sum')
+    pl.xscale('log')
+    pl.savefig('%s/run_%s/ROC_curve.png' % (out_dir,now))
+    pl.close()
+
 
     return ROC_sum, FAP
 
-def plotter():
+def score_plotter(out_dir, now, test_data_p, params, back_test):
+    n_noise = len(back_test)
+    for idx,label in enumerate(params):
+        pl.scatter(test_data_p[0:n_noise,idx],pred_prob[0:n_noise],marker="o",label='background')
+        pl.scatter(test_data_p[n_noise:,idx],pred_prob[n_noise:],marker="^",label='injection')
+        pl.legend(frameon=True)
+        pl.title('Score vs. %s' % label)
+        pl.ylabel('Score')
+        pl.xlabel('%s' % label)
+        pl.savefig('%s/run_%s/score_vs_%s.png' % (out_dir,now,label))
+        pl.close()
+
+def colored_plotter(out_dir, now, test_data_p, params, back_test):
+    n_noise = len(back_test)
+    for idx,label in enumerate(params):
+        for idx2,label2 in enumerate(params):
+             pl.scatter(test_data_p[0:n_noise,idx],test_data_p[0:n_noise,idx2],c=pred_prob[0:n_noise],marker="o",label='background')
+             pl.scatter(test_data_p[n_noise:,idx],test_data_p[n_noise:,idx2],c=pred_prob[n_noise:],marker="^",label='injection')
+             pl.legend(frameon=True)
+             pl.title('%s vs. %s' % (idx2,idx))
+             pl.xlabel('%s' % idx)
+             pl.ylabel('%s' idx2)
+             pl.colorbar()
+             pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,idx2,idx))
+             pl.close() 
+
+def epoch_plotter(out_dir,now,hist.history):
+    #Loss vs. Epoch
+    pl.plot(hist.history['loss'])
+    pl.title('Loss vs. Epoch')
+    pl.xlabel('Epoch')
+    pl.ylabel('Loss')
+    pl.yscale('log')
+    pl.savefig('%s/run_%s/loss_vs_epoch.png' % (out_dir,now))
+    pl.close()
+
+    #Accuracy vs. Epoch
+    pl.plot(hist.history['acc'])
+    pl.title('Accuracy vs. Epoch')
+    pl.xlabel('Epoch')
+    pl.ylabel('Accuracy')
+    pl.savefig('%s/run_%s/acc_vs_epoch.png' % (out_dir,now))
+    pl.close()
 
 
 #Main function
@@ -337,6 +405,7 @@ def main():
     data_files = args['dataset'].split(',')
     back_files = args['back_dataset'].split(',')
     out_dir = args['output_dir']
+    now = datetime.datetime.now()       #Get current time for time stamp labels
     back_params = ['marg_l','count','maxnewsnr','maxsnr','time','ratio_chirp','delT','delta_chirp','template_duration']
     inj_params = ['marg_l_inj','count_inj','maxnewsnr_inj','maxsnr_inj','time_inj','ratio_chirp_inj','delT_inj','delta_chirp_inj','dist_inj','template_duration_inj']
     tt_split = float(args['train_perc'])
@@ -369,10 +438,28 @@ def main():
     train_weights, test_weights = samp_weight(back_trig, inj_trig)
 
     #training/testing on deep neural network
-    res_pre, eval_results, hist = the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test)
+    res_pre, eval_results, hist = the_machine(nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
     
     #Compute the ROC curve
-    ROC_w_sum, ROC_newsnr_sum, FAP = ROC(back_test,test_data,inj_test_weight,inj_test,lab_test)
-    
+    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC(back_test,test_data,inj_test_weight,inj_test,lab_test)
+
+    #Score plots
+    score_plotter(out_dir, now, test_data_p, params, back_test)
+
+    #colored plots
+    colored_plotter(out_dir, now, test_data_p, params, back_test)
+ 
+    #Accuracy and loss plots
+    epoch_plotter(out_dir, now, hist)
+
+    #Write data to an hdf file
+    with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
+        hf.create_dataset('FAP', data=FAP)
+        hf.create_dataset('ROC_w_sum', data=ROC_w_sum)
+        hf.create_dataset('pred_prob', data=pred_prob)
+        hf.create_dataset('test_data', data=test_data)
+        hf.create_dataset('train_data', data=train_data)
+        hf.create_dataset('ROC_newsnr_sum', data=ROC_newsnr_sum)
+
 if __name__ == '__main__':
     main()
