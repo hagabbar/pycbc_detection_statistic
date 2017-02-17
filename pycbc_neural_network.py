@@ -13,7 +13,7 @@ import numpy as np
 import h5py
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Dropout, ActivityRegularization
-from keras.optimizers import SGD
+from keras.optimizers import RMSprop
 import sys
 import os
 from math import exp, log
@@ -57,10 +57,10 @@ def load_back_data(data, params):
                             dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
 
     for idx,key in enumerate(params):
-        print params
         if key == 'delta_chirp' or key == 'time':
             continue
         elif idx == 0:
+            print params
             back_comb = back[key]
        
         else:
@@ -97,10 +97,10 @@ def load_inj_data(data, params, dict_comb):
                         dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
 
     for idx,key in enumerate(params):
-        print params
         if key  == 'delta_chirp_inj' or key == 'time_inj' or key == 'dist_inj':
             continue
         elif idx == 0:
+            print params
             inj_comb = inj[key]
         else:
             inj_comb = np.hstack((inj_comb,inj[key]))
@@ -150,20 +150,31 @@ def sep(trig_comb,inj_comb,indices_trig,tt_split, inj_weights):
 
     return train_data, test_data, trig_test, inj_test, inj_test_weight, inj_train_weight
 
-def normalize(trig_comb,comb_all):
+def normalize(trig_comb,comb_all,pre_proc_log):
     print 'normalizing features'
-    marg_l = ((np.log(comb_all[:,0]) - np.log(comb_all[:,0]).mean())/np.log(comb_all[:,0]).max()).reshape((comb_all.shape[0],1))
-    count = ((comb_all[:,1] - comb_all[:,1].mean())/comb_all[:,1].max()).reshape((comb_all.shape[0],1))
-    maxnewsnr = ((np.log(comb_all[:,2]) - np.log(comb_all[:,2]).mean())/np.log(comb_all[:,2]).max()).reshape((comb_all.shape[0],1))
-    maxsnr = ((np.log(comb_all[:,3]) - np.log(comb_all[:,3]).mean())/np.log(comb_all[:,3]).max()).reshape((comb_all.shape[0],1))
-    ratio_chirp = ((np.log(comb_all[:,4]) - np.log(comb_all[:,4]).mean())/np.log(comb_all[:,4]).max()).reshape((comb_all.shape[0],1))
-    delT = ((comb_all[:,5] - comb_all[:,5].mean())/comb_all[:,5].max()).reshape((comb_all.shape[0],1))
-    tmp_dur = ((np.log(comb_all[:,6]) - np.log(comb_all[:,6]).mean())/np.log(comb_all[:,6]).max()).reshape((comb_all.shape[0],1))
-    trig_comb = np.hstack((marg_l[0:trig_comb.shape[0]],count[0:trig_comb.shape[0]],maxnewsnr[0:trig_comb.shape[0]],maxsnr[0:trig_comb.shape[0]],ratio_chirp[0:trig_comb.shape[0]],delT[0:trig_comb.shape[0]],tmp_dur[0:trig_comb.shape[0]]))
-    inj_comb = np.hstack((marg_l[trig_comb.shape[0]:],count[trig_comb.shape[0]:],maxnewsnr[trig_comb.shape[0]:],maxsnr[trig_comb.shape[0]:],ratio_chirp[trig_comb.shape[0]:],delT[trig_comb.shape[0]:],tmp_dur[trig_comb.shape[0]:]))
-    comb_all = np.vstack((trig_comb, inj_comb)) 
+    for idx in range(0,comb_all.shape[1]):
+       if pre_proc_log[idx] == True:
+           if idx == 0:
+               tmp_trig_comb = ((np.log(comb_all[:,idx]) - np.log(comb_all[:,idx]).mean())/np.log(comb_all[:,idx]).max()).reshape((comb_all.shape[0],1))
+               tmp_inj_comb = tmp_trig_comb[trig_comb.shape[0]:]           
+               tmp_trig_comb = tmp_trig_comb[0:trig_comb.shape[0]]
+               continue
+           else:
+               tmp = ((np.log(comb_all[:,idx]) - np.log(comb_all[:,idx]).mean())/np.log(comb_all[:,idx]).max()).reshape((comb_all.shape[0],1))
+       elif pre_proc_log[idx] == False:
+           if idx == 0:
+               tmp_trig_comb = ((comb_all[:,idx] - comb_all[:,idx].mean())/comb_all[:,idx].max()).reshape((comb_all.shape[0],1))
+               tmp_inj_comb = tmp_trig_comb[trig_comb.shape[0]:]
+               tmp_trig_comb = tmp_trig_comb[0:trig_comb.shape[0]]
+               continue
+           else:
+               tmp = ((comb_all[:,idx] - comb_all[:,idx].mean())/comb_all[:,idx].max()).reshape((comb_all.shape[0],1))
 
-    return trig_comb, inj_comb, comb_all
+       tmp_trig_comb = np.hstack((tmp_trig_comb,tmp[0:trig_comb.shape[0]])) 
+       tmp_inj_comb = np.hstack((tmp_inj_comb,tmp[trig_comb.shape[0]:])) 
+    comb_all = np.vstack((tmp_trig_comb, tmp_inj_comb)) 
+
+    return tmp_trig_comb, tmp_inj_comb, comb_all    
 
 def costco_label_maker(back_trig, inj_trig, tt_perc):
     print 'bought a label maker for my nn, it\'s pretty nice'
@@ -194,19 +205,22 @@ def samp_weight(trig_comb,inj_comb,inj_train_weight,inj_test_weight):
 def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now):
     print 'It\'s is alive!!!'
     model = Sequential()
-    act = keras.layers.advanced_activations.ELU(alpha=1.0)                         #LeakyReLU(alpha=0.1)
+    act = keras.layers.advanced_activations.LeakyReLU(alpha=0.1)                       #LeakyReLU(alpha=0.1)
     early_stopping = EarlyStopping(monitor='val_loss', patience=2)
 
     model.add(Dense(10, input_dim=trig_comb.shape[1]))
     act
     model.add(Dense(7))
     act
+    model.add(Dropout(0.2))
+    model.add(Dense(3))
+    act
+    model.add(Dropout(0.2))
     model.add(Dense(3))
     act
     model.add(Dense(3))
     act
-    model.add(Dense(3))
-    act
+    model.add(Dropout(0.2))
     model.add(Dense(3))
     act
 
@@ -214,8 +228,8 @@ def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, tr
 
     #Compiling model
     print("[INFO] compiling model...")
-    sgd = SGD(lr=0.05)
-    model.compile(loss="binary_crossentropy", optimizer='rmsprop',
+    rmsprop = RMSprop(lr=.001)
+    model.compile(loss="binary_crossentropy", optimizer=rmsprop,
             metrics=["accuracy","binary_crossentropy"], class_mode='binary')
    
     #model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
@@ -230,7 +244,7 @@ def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, tr
     print("[INFO] evaluating on testing set...")
     eval_results = model.evaluate(test_data, lab_test,
                                         sample_weight=test_weights,
-                                            batch_size=32, verbose=1)
+                                            batch_size=batch_size, verbose=1)
     print("[INFO] loss={:.4f}, accuracy: {:.4f}%".format(eval_results[0],
             eval_results[1] * 100))
     #Saving prediction probabilities to a variable
@@ -249,10 +263,10 @@ def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, tr
     return res_pre, eval_results, hist, model
 
 #Function to compute ROC curve for both newsnr and some other score value
-def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model):
+def ROC_inj_and_newsnr(batch_size,trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model):
     print 'generating ROC curve plot'
     n_noise = len(trig_test)
-    pred_prob = model.predict_proba(test_data, batch_size=32).T[0]
+    pred_prob = model.predict_proba(test_data, batch_size=batch_size).T[0]
     prob_sort_noise = pred_prob[pred_prob[0:n_noise].argsort()][::-1]
     prob_sort_inj = pred_prob[n_noise:][pred_prob[n_noise:].argsort()][::-1]
     prob_sort_injWeight = inj_test_weight.T[0][pred_prob[n_noise:].argsort()][::-1]
@@ -260,7 +274,7 @@ def ROC_inj_and_newsnr(trig_test,test_data,inj_test_weight,inj_test,lab_test,out
     newsnr_sort_noiseNewsnr = trig_test[:,2][trig_test[:,2][0:].argsort()][::-1]
     newsnr_sort_injNewsnr = inj_test[:,2][inj_test[:,2][0:].argsort()][::-1]
     newsnr_sort_injWeight = inj_test_weight.T[0][inj_test[:,2][0:].argsort()][::-1]
-    pred_class = model.predict_classes(test_data)
+    pred_class = model.predict_classes(test_data, batch_size=batch_size)
     class_sort = pred_class[pred_prob[:].argsort()][::-1]
     orig_test_labels = lab_test[pred_prob[:].argsort()][::-1]
 
@@ -429,6 +443,7 @@ def main():
     now = datetime.datetime.now()       #Get current time for time stamp labels
     back_params = ['marg_l','count','maxnewsnr','maxsnr','ratio_chirp','delT','template_duration','delta_chirp','time']
     inj_params = ['marg_l_inj','count_inj','maxnewsnr_inj','maxsnr_inj','ratio_chirp_inj','delT_inj','template_duration_inj','dist_inj','delta_chirp_inj','time_inj']
+    pre_proc_log = [True,False,True,True,True,False,True] #True means to take log of feature, False means don't take log of feature during pre-processing
     tt_split = float(args['train_perc'])
     nb_epoch = int(args['nb_epoch'])
     batch_size = int(args['batch_size'])
@@ -444,7 +459,7 @@ def main():
     train_data_p, test_data_p, comb_all = orig_norm(back_trig, inj_trig, tt_split)    
 
     #Normalizing features from zero to one
-    back_trig, inj_trig, comb_all = normalize(back_trig, comb_all)
+    back_trig, inj_trig, comb_all = normalize(back_trig, comb_all, pre_proc_log)
 
     #Randomizing the order of the background triggers
     indices_trig = np.random.permutation(back_trig.shape[0])
@@ -462,7 +477,7 @@ def main():
     res_pre, eval_results, hist, model = the_machine(back_trig, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
     
     #Compute the ROC curve
-    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC_inj_and_newsnr(back_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model)
+    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC_inj_and_newsnr(batch_size,back_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model)
 
     #Score/histogram plots
     main_plotter(out_dir, now, test_data_p, back_params[:len(back_params)-2], back_test, hist, back_test, pred_prob)
