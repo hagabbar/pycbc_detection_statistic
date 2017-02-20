@@ -14,6 +14,7 @@ import h5py
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Dropout, ActivityRegularization
 from keras.optimizers import RMSprop
+from keras.layers.normalization import BatchNormalization
 import sys
 import os
 from math import exp, log
@@ -209,22 +210,38 @@ def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, tr
     early_stopping = EarlyStopping(monitor='val_loss', patience=2)
 
     model.add(Dense(10, input_dim=trig_comb.shape[1]))
-    act
-    model.add(Dense(7))
-    act
-    model.add(Dropout(0.2))
-    model.add(Dense(3))
+    model.add(BatchNormalization())
     act
     model.add(Dropout(0.2))
-    model.add(Dense(3))
-    act
-    model.add(Dense(3))
-    act
-    model.add(Dropout(0.2))
-    model.add(Dense(3))
-    act
 
-    model.add(Dense(1, init='normal', activation='sigmoid'))
+    model.add(Dense(7))
+    model.add(BatchNormalization())
+    act
+    model.add(Dropout(0.2))
+
+    model.add(Dense(3))
+    model.add(BatchNormalization())
+    act
+    model.add(Dropout(0.2))
+
+    model.add(Dense(3))
+    model.add(BatchNormalization())
+    act
+    model.add(Dropout(0.2))
+
+    model.add(Dense(3))
+    model.add(BatchNormalization())
+    act
+    model.add(Dropout(0.2))
+
+    model.add(Dense(3))
+    model.add(BatchNormalization())
+    act
+    model.add(Dropout(0.2))
+
+    model.add(Dense(1, init='normal'))
+    model.add(BatchNormalization())
+    model.add(Activation('sigmoid'))
 
     #Compiling model
     print("[INFO] compiling model...")
@@ -376,10 +393,13 @@ def main_plotter(out_dir, now, test_data_p, params, back_test, hist, trig_test, 
     pl.savefig('%s/run_%s/acc_vs_epoch.png' % (out_dir,now))
     pl.close()
 
+    #Add in hist of score values here.
+
+
     for idx,lab in enumerate(params):
         print('plotting score vs. %s' % lab)
-        pl.scatter(test_data_p[0:n_noise,idx],pred_prob[0:n_noise],marker="o",label='background')
-        pl.scatter(test_data_p[n_noise:,idx],pred_prob[n_noise:],marker="^",label='injection')
+        pl.scatter(test_data_p[0:n_noise,idx],pred_prob[0:n_noise],marker="o",s=10,label='background',alpha=0.4)
+        pl.scatter(test_data_p[n_noise:,idx],pred_prob[n_noise:],marker="^",s=10,label='injection',alpha=0.4)
         pl.legend(frameon=True)
         pl.title('Score vs. %s' % lab)
         pl.ylabel('Score')
@@ -388,8 +408,14 @@ def main_plotter(out_dir, now, test_data_p, params, back_test, hist, trig_test, 
         pl.close()
 
         print('plotting %s histogram' % lab)
-        pl.hist(test_data_p[0:n_noise,idx], 50, label='background')
-        pl.hist(test_data_p[n_noise:,idx], 50, label='injection')
+        numpy_hist_1, bins_1 = np.histogram(test_data_p[0:n_noise,idx], bins=100, density=True)
+        numpy_hist_2, bins_2 = np.histogram(test_data_p[n_noise:,idx], bins=100, density=True)
+        width_1 = 0.7 * (bins_1[1] - bins_1[0])
+        width_2 = 0.7 * (bins_2[1] - bins_2[0])
+        center_1 = (bins_1[:-1] + bins_1[1:]) / 2
+        center_2 = (bins_2[:-1] + bins_2[1:]) / 2
+        pl.bar(center_1, numpy_hist_1, label='background', alpha=0.4, align='center', width=width_1)
+        pl.bar(center_2, numpy_hist_2, label='injection', alpha=0.4, align='center', width=width_2)
         pl.legend(frameon=True)
         pl.title('%s histogram' % lab)
         pl.xlabel('%s' % lab)
@@ -397,17 +423,26 @@ def main_plotter(out_dir, now, test_data_p, params, back_test, hist, trig_test, 
         pl.close()
 
         for idx2,lab2 in enumerate(params):
-             print('plotting %s vs. %s' % (lab2,lab))
-             pl.scatter(test_data_p[0:n_noise,idx],test_data_p[0:n_noise,idx2],c=pred_prob[0:n_noise],marker="o",label='background')
-             pl.scatter(test_data_p[n_noise:,idx],test_data_p[n_noise:,idx2],c=pred_prob[n_noise:],marker="^",label='injection')
-             pl.legend(frameon=True)
-             pl.title('%s vs. %s' % (lab2,lab))
-             pl.xlabel('%s' % lab)
-             pl.ylabel('%s' % lab2)
-             pl.colorbar()
-             pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,lab2,lab))
-             pl.close() 
+             if lab == lab2:
+                 continue
+             else:
+                 print('plotting %s vs. %s' % (lab2,lab))
+                 pl.scatter(test_data_p[0:n_noise,idx],test_data_p[0:n_noise,idx2],c=pred_prob[0:n_noise],marker="o",s=10,label='background', alpha=0.4)
+                 pl.scatter(test_data_p[n_noise:,idx],test_data_p[n_noise:,idx2],c=pred_prob[n_noise:],marker="^",s=10,label='injection', alpha=0.4)
+                 pl.legend(frameon=True)
+                 pl.title('%s vs. %s' % (lab2,lab))
+                 pl.xlabel('%s' % lab)
+                 pl.ylabel('%s' % lab2)
+                 pl.colorbar()
+                 pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,lab2,lab))
+                 pl.close() 
 
+def alex_invest(inj_test_weights,inj_test,pred_prob):
+    newsnr_thresh = 10
+    score_thresh = 0.2
+    est_volume = inj_test_weights[inj_test[:,2] > newsnr_thresh and pred_prob < score_thresh]
+    print('This is the estimated volume of triggers with newsnr grater than %s and score less than %s: %s' % (newsnr_thresh,score_thresh,est_volume))
+    
 #Main function
 def main(): 
     #Configure tensorflow to use gpu memory as needed
@@ -434,16 +469,19 @@ def main():
             help="Number of Epochs")
     ap.add_argument("-bs", "--batch_size", required=True,
             help="Batch size for the training process (e.g. number of samples to introduce to network at any given epoch)")
+    ap.add_argument("-u", "--usertag", required=True,
+            help="label for given run")
     args = vars(ap.parse_args())
 
     #Initializing parameters
     data_files = args['dataset'].split(',')
     back_files = args['back_dataset'].split(',')
     out_dir = args['output_dir']
-    now = datetime.datetime.now()       #Get current time for time stamp labels
+    #now = datetime.datetime.now()       #Get current time for time stamp labels
+    now = args['usertag']
     back_params = ['marg_l','count','maxnewsnr','maxsnr','ratio_chirp','delT','template_duration','delta_chirp','time']
     inj_params = ['marg_l_inj','count_inj','maxnewsnr_inj','maxsnr_inj','ratio_chirp_inj','delT_inj','template_duration_inj','dist_inj','delta_chirp_inj','time_inj']
-    pre_proc_log = [True,False,True,True,True,False,True] #True means to take log of feature, False means don't take log of feature during pre-processing
+    pre_proc_log = [True,True,True,True,True,False,True] #True means to take log of feature, False means don't take log of feature during pre-processing
     tt_split = float(args['train_perc'])
     nb_epoch = int(args['nb_epoch'])
     batch_size = int(args['batch_size'])
@@ -480,7 +518,7 @@ def main():
     ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC_inj_and_newsnr(batch_size,back_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model)
 
     #Score/histogram plots
-    main_plotter(out_dir, now, test_data_p, back_params[:len(back_params)-2], back_test, hist, back_test, pred_prob)
+    main_plotter(out_dir, now, test_data, back_params[:len(back_params)-2], back_test, hist, back_test, pred_prob)
 
     #Write data to an hdf file
     with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
@@ -490,6 +528,8 @@ def main():
         hf.create_dataset('test_data', data=test_data)
         hf.create_dataset('train_data', data=train_data)
         hf.create_dataset('ROC_newsnr_sum', data=ROC_newsnr_sum)
+        hf.create_dataset('inj_weights', data=inj_weights)
+
 
     print 'and...presto! You\'re done!'
 if __name__ == '__main__':
