@@ -372,7 +372,7 @@ def ROC(inj_weight, inj_param, noise_param, out_dir, now):
 
     return ROC_sum, FAP
 
-def main_plotter(out_dir, now, test_data_p, params, back_test, hist, trig_test, pred_prob):
+def main_plotter(out_dir, now, test_data_p, params, back_test, hist, trig_test, pred_prob, pre_proc_log):
     n_noise = len(trig_test)
     #Loss vs. Epoch
     print 'plotting loss vs. epoch'
@@ -396,18 +396,18 @@ def main_plotter(out_dir, now, test_data_p, params, back_test, hist, trig_test, 
     #Add in hist of score values here.
 
 
-    for idx,lab in enumerate(params):
-        print('plotting score vs. %s' % lab)
+    for idx,lab in enumerate(zip(params,pre_proc_log)):
+        print('plotting score vs. %s' % lab[0])
         pl.scatter(test_data_p[0:n_noise,idx],pred_prob[0:n_noise],marker="o",s=10,label='background',alpha=0.4)
         pl.scatter(test_data_p[n_noise:,idx],pred_prob[n_noise:],marker="^",s=10,label='injection',alpha=0.4)
         pl.legend(frameon=True)
-        pl.title('Score vs. %s' % lab)
+        pl.title('Score vs. %s' % lab[0])
         pl.ylabel('Score')
-        pl.xlabel('%s' % lab)
-        pl.savefig('%s/run_%s/score_vs_%s.png' % (out_dir,now,lab))
+        pl.xlabel('%s' % lab[0])
+        pl.savefig('%s/run_%s/score_vs_%s.png' % (out_dir,now,lab[0]))
         pl.close()
 
-        print('plotting %s histogram' % lab)
+        print('plotting %s histogram' % lab[0])
         numpy_hist_1, bins_1 = np.histogram(test_data_p[0:n_noise,idx], bins=100, density=True)
         numpy_hist_2, bins_2 = np.histogram(test_data_p[n_noise:,idx], bins=100, density=True)
         width_1 = 0.7 * (bins_1[1] - bins_1[0])
@@ -417,24 +417,24 @@ def main_plotter(out_dir, now, test_data_p, params, back_test, hist, trig_test, 
         pl.bar(center_1, numpy_hist_1, label='background', alpha=0.4, align='center', width=width_1)
         pl.bar(center_2, numpy_hist_2, label='injection', alpha=0.4, align='center', width=width_2)
         pl.legend(frameon=True)
-        pl.title('%s histogram' % lab)
-        pl.xlabel('%s' % lab)
-        pl.savefig('%s/run_%s/histograms/%s.png' % (out_dir,now,lab))
+        pl.title('%s histogram' % lab[0])
+        pl.xlabel('%s' % lab[0])
+        pl.savefig('%s/run_%s/histograms/%s.png' % (out_dir,now,lab[0]))
         pl.close()
 
-        for idx2,lab2 in enumerate(params):
-             if lab == lab2:
+        for idx2,lab2 in enumerate(zip(params,pre_proc_log)):
+             if lab[0] == lab2[0]:
                  continue
              else:
-                 print('plotting %s vs. %s' % (lab2,lab))
+                 print('plotting %s vs. %s' % (lab2[0],lab[0]))
                  pl.scatter(test_data_p[0:n_noise,idx],test_data_p[0:n_noise,idx2],c=pred_prob[0:n_noise],marker="o",s=10,label='background', alpha=0.4)
                  pl.scatter(test_data_p[n_noise:,idx],test_data_p[n_noise:,idx2],c=pred_prob[n_noise:],marker="^",s=10,label='injection', alpha=0.4)
                  pl.legend(frameon=True)
-                 pl.title('%s vs. %s' % (lab2,lab))
-                 pl.xlabel('%s' % lab)
-                 pl.ylabel('%s' % lab2)
+                 pl.title('%s vs. %s' % (lab2[0],lab[0]))
+                 pl.xlabel('%s' % lab[0])
+                 pl.ylabel('%s' % lab2[0])
                  pl.colorbar()
-                 pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,lab2,lab))
+                 pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,lab2[0],lab[0]))
                  pl.close() 
 
 def alex_invest(inj_test_weights,inj_test,pred_prob):
@@ -518,7 +518,7 @@ def main():
     ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob = ROC_inj_and_newsnr(batch_size,back_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model)
 
     #Score/histogram plots
-    main_plotter(out_dir, now, test_data, back_params[:len(back_params)-2], back_test, hist, back_test, pred_prob)
+    main_plotter(out_dir, now, test_data, back_params[:len(back_params)-2], back_test, hist, back_test, pred_prob, pre_proc_log)
 
     #Write data to an hdf file
     with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
