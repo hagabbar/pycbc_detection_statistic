@@ -13,7 +13,8 @@ Required Dependencies:
 -sympy
 
 1.) Login to lho cluster. <br />
-    gsissh albert.einstein@ldas-pcdev2.ligo-wa.caltech.edu <br />
+    gsissh albert.einstein@ldas-pcdev2.ligo-wa.caltech.edu
+    
 2.) Login to dgx1 machine. (you must ask Stuart for an account fist ... anderson@ligo.caltech.edu) <br />
     ssh dgx-1 <br />
 3.) In feature\_gen\_scripts, run get\_sngl\_stats python script to get features for testing and training. <br />
