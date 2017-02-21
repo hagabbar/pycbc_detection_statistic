@@ -2,15 +2,7 @@
 
 Instructions on how to run: <br />
 
-Required Dependencies:
--keras
--tensorflow
--matplotlib
--numpy
--h5py
--pycbc
--scipy
--sympy
+Required Dependencies: keras, tensorflow, matplotlib, numpy, h5py, pycbc, scipy, sympy
 
 1.) Login to lho cluster. <br />
     gsissh albert.einstein@ldas-pcdev2.ligo-wa.caltech.edu
