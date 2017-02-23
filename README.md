@@ -18,4 +18,4 @@ e.g. python get\_sngl\_stats --ifo H1 --single-trigger-files H1-HDF\_TRIGGER\_ME
 
 
 4.) In main directory, run pycbc_neural_network.py script to train/test on feature set generated in the previous step. <br />
-e.g. python pycbc_neural_network.py -d NSBH01.hdf,NSBH02.hdf -b path/to/one/result/file/from/each/chunk/NSBH01.hdf -o /path/to/output/directory -t 0.7 -e 10 -bs 1000 -u usertag  >/dev/null 2>err.txt & <br />
+e.g. python pycbc_neural_network.py -d path/to/data/chunk*/*.hdf -b path/to/one/result/file/from/each/chunk\*/BBH01.hdf -o /path/to/output/directory -t 0.7 -e 10 -bs 1000 -u usertag  >/dev/null 2>err.txt & <br />
