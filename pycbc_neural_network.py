@@ -207,38 +207,39 @@ def samp_weight(trig_comb,inj_comb,inj_train_weight,inj_test_weight):
 def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now):
     print 'It\'s is alive!!!'
     model = Sequential()
+    drop_rate = 0.2
     act = keras.layers.advanced_activations.LeakyReLU(alpha=0.1)                       #LeakyReLU(alpha=0.1)
     early_stopping = EarlyStopping(monitor='val_loss', patience=2)
 
     model.add(Dense(10, input_dim=trig_comb.shape[1]))
     model.add(BatchNormalization())
     act
-    model.add(Dropout(0.2))
+    model.add(Dropout(drop_rate))
 
     model.add(Dense(7))
     model.add(BatchNormalization())
     act
-    model.add(Dropout(0.2))
+    model.add(Dropout(drop_rate))
 
     model.add(Dense(3))
     model.add(BatchNormalization())
     act
-    model.add(Dropout(0.2))
+    model.add(Dropout(drop_rate))
 
     model.add(Dense(3))
     model.add(BatchNormalization())
     act
-    model.add(Dropout(0.2))
+    model.add(Dropout(drop_rate))
 
     model.add(Dense(3))
     model.add(BatchNormalization())
     act
-    model.add(Dropout(0.2))
+    model.add(Dropout(drop_rate))
 
     model.add(Dense(3))
     model.add(BatchNormalization())
     act
-    model.add(Dropout(0.2))
+    model.add(Dropout(drop_rate))
 
     model.add(Dense(1, init='normal'))
     model.add(BatchNormalization())
@@ -246,7 +247,7 @@ def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, tr
 
     #Compiling model
     print("[INFO] compiling model...")
-    rmsprop = RMSprop(lr=.001)
+    rmsprop = RMSprop(lr=.001)  #default is 0.001
     model.compile(loss="binary_crossentropy", optimizer=rmsprop,
             metrics=["accuracy","binary_crossentropy"], class_mode='binary')
    
@@ -379,6 +380,7 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
     n_noise = len(trig_test)
     #Loss vs. Epoch
     print 'plotting loss vs. epoch'
+    pl.figure(run_num)
     pl.plot(run_num)
     pl.plot(hist.history['loss'])
     pl.title('Loss vs. Epoch')
@@ -410,7 +412,6 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
     pl.bar(center_1, numpy_hist_1, label='background', alpha=0.4, align='center', width=width_1)
     pl.bar(center_2, numpy_hist_2, label='injection', alpha=0.4, align='center', width=width_2)
     pl.legend(frameon=True)
-    pl.colorbar()
     pl.savefig('%s/run_%s/score_hist.png' % (out_dir,now))
     pl.close()
 
@@ -499,37 +500,37 @@ def main():
 
     #construct the argument parse and parse the arguments
     ap = argparse.ArgumentParser()
-    ap.add_argument("-d", "--dataset", required=True,
-            help="path to input dataset")
-    ap.add_argument("-b", "--back_dataset", required=True,
-            help="path to one dataset file from each chunk you are running over")
-    ap.add_argument("-o", "--output_dir", required=True,
+    ap.add_argument("-d", "--dataset", required=True, nargs='+', type=str,
+            help="path to directory containing datasets for each chunk (e.g. path/to/data/chunk*/*.hdf)")
+    ap.add_argument("-b", "--back_dataset", required=True, nargs='+', type=str,
+            help="path to one dataset file from each chunk you are running over (e.g. data/O1/L1/chunk*/BBH01.hdf)")
+    ap.add_argument("-o", "--output_dir", required=True, type=str,
             help="path to output directory")
-    ap.add_argument("-t", "--train_perc", required=False, default=0.5,
+    ap.add_argument("-t", "--train_perc", required=False, default=0.5, type=float,
             help="Percentage of triggers you want to train. Remaining percentage will be set aside for testing")
-    ap.add_argument("-e", "--nb_epoch", required=False, default=100,
+    ap.add_argument("-e", "--nb_epoch", required=False, default=100, type=int,
             help="Number of Epochs")
-    ap.add_argument("-bs", "--batch_size", required=False, default=32,
+    ap.add_argument("-bs", "--batch_size", required=False, default=32, type=int,
             help="Batch size for the training process (e.g. number of samples to introduce to network at any given epoch)")
-    ap.add_argument("-u", "--usertag", required=False, default=cur_time,
+    ap.add_argument("-u", "--usertag", required=False, default=cur_time, type=str,
             help="label for given run")
-    ap.add_argument("-r", "--run_number", required=False, default=0,
+    ap.add_argument("-r", "--run_number", required=False, default=0, type=int,
             help="If performing multiple runs on same machine, specify a unique number for each run (must be greater than zero)")
     args = vars(ap.parse_args())
 
     #Initializing parameters
-    data_files = args['dataset'].split(',')
-    back_files = args['back_dataset'].split(',')
+    data_files = args['dataset']
+    back_files = args['back_dataset']
     out_dir = args['output_dir']
     #now = datetime.datetime.now()       #Get current time for time stamp labels
     now = args['usertag']
     back_params = ['marg_l','count','maxnewsnr','maxsnr','ratio_chirp','delT','template_duration','delta_chirp','time']
     inj_params = ['marg_l_inj','count_inj','maxnewsnr_inj','maxsnr_inj','ratio_chirp_inj','delT_inj','template_duration_inj','dist_inj','delta_chirp_inj','time_inj']
     pre_proc_log = [True,True,True,True,True,False,True] #True means to take log of feature, False means don't take log of feature during pre-processing
-    tt_split = float(args['train_perc'])
-    nb_epoch = int(args['nb_epoch'])
-    batch_size = int(args['batch_size'])
-    run_num = int(args['run_number'])
+    tt_split = args['train_perc']
+    nb_epoch = args['nb_epoch']
+    batch_size = args['batch_size']
+    run_num = args['run_number']
 
     #Downloading background and injection triggers
     back_trig, dict_comb = load_back_data(back_files, back_params)
