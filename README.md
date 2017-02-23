@@ -4,6 +4,9 @@ Instructions on how to run: <br />
 
 Required Dependencies: keras, tensorflow, matplotlib, numpy, h5py, pycbc, scipy, sympy
 
+If you want to use just one GPU for a run then you must set the following environment variable to your desired GPU number <br />
+export CUDA_VISIBLE_DEVICES="1"
+
 1.) Login to lho cluster. <br />
     gsissh albert.einstein@ldas-pcdev2.ligo-wa.caltech.edu
     
