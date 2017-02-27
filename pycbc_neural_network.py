@@ -199,8 +199,8 @@ def samp_weight(trig_comb,inj_comb,inj_train_weight,inj_test_weight):
     trig_weights.fill(1/((trig_comb.shape[0])/(inj_comb.shape[0])))
     trig_w_train = trig_weights[:int(trig_comb.shape[0]*.7)]
     trig_w_test = trig_weights[int(trig_comb.shape[0]*.7):]
-    train_weights = 100.*np.vstack((trig_w_train,inj_train_weight)).flatten()
-    test_weights = 100.*np.vstack((trig_w_test,inj_test_weight)).flatten()
+    train_weights = np.vstack((trig_w_train,inj_train_weight)).flatten()
+    test_weights = np.vstack((trig_w_test,inj_test_weight)).flatten()
 
     return train_weights, test_weights
 
@@ -211,43 +211,42 @@ def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, tr
     act = keras.layers.advanced_activations.LeakyReLU(alpha=0.1)                       #LeakyReLU(alpha=0.1)
     early_stopping = EarlyStopping(monitor='val_loss', patience=2)
 
-    model.add(Dense(10, input_dim=trig_comb.shape[1]))
+    model.add(Dense(70, input_dim=trig_comb.shape[1])) #10
     model.add(BatchNormalization())
     act
     model.add(Dropout(drop_rate))
 
-    model.add(Dense(7))
+    model.add(Dense(70)) #7
     model.add(BatchNormalization())
     act
     model.add(Dropout(drop_rate))
 
-    model.add(Dense(3))
+    model.add(Dense(70)) #3
     model.add(BatchNormalization())
     act
     model.add(Dropout(drop_rate))
 
-    model.add(Dense(3))
+    model.add(Dense(70)) #3
     model.add(BatchNormalization())
     act
     model.add(Dropout(drop_rate))
 
-    model.add(Dense(3))
+    model.add(Dense(70)) #3
     model.add(BatchNormalization())
     act
     model.add(Dropout(drop_rate))
 
-    model.add(Dense(3))
+    model.add(Dense(70)) #3
     model.add(BatchNormalization())
     act
     model.add(Dropout(drop_rate))
 
     model.add(Dense(1, init='normal'))
-    model.add(BatchNormalization())
     model.add(Activation('sigmoid'))
 
     #Compiling model
     print("[INFO] compiling model...")
-    rmsprop = RMSprop(lr=.001)  #default is 0.001
+    rmsprop = RMSprop(lr=.005)  #default is 0.001
     model.compile(loss="binary_crossentropy", optimizer=rmsprop,
             metrics=["accuracy","binary_crossentropy"], class_mode='binary')
    
@@ -381,8 +380,9 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
     #Loss vs. Epoch
     print 'plotting loss vs. epoch'
     pl.figure(run_num)
-    pl.plot(run_num)
-    pl.plot(hist.history['loss'])
+    pl.plot(hist.history['loss'], label='Training')
+    pl.plot(hist.history['val_loss'], label='Validation')
+    pl.legend(frameon=True)
     pl.title('Loss vs. Epoch')
     pl.xlabel('Epoch')
     pl.ylabel('Loss')
@@ -393,7 +393,9 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
     #Accuracy vs. Epoch
     print 'plotting accuracy vs. epoch'
     pl.figure(run_num)
-    pl.plot(hist.history['acc'])
+    pl.plot(hist.history['acc'], label='Training')
+    pl.plot(hist.history['val_acc'], label='Validation')
+    pl.legend(frameon=True)
     pl.title('Accuracy vs. Epoch')
     pl.xlabel('Epoch')
     pl.ylabel('Accuracy')
