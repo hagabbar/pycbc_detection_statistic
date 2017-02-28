@@ -12,7 +12,7 @@ from keras.layers import LSTM, Dense
 import numpy as np
 import h5py
 from keras.models import Sequential
-from keras.layers import Dense, Activation, Dropout, ActivityRegularization
+from keras.layers import Dense, Activation, GaussianDropout, Dropout, ActivityRegularization
 from keras.optimizers import RMSprop
 from keras.layers.normalization import BatchNormalization
 import sys
@@ -33,8 +33,8 @@ def load_back_data(data, params):
     dict_comb = {}
     back = {}
     tmp_comb = {}
-    h1 = h5py.File(data[0], 'r')
     for fi in data:
+        print fi
         h1 = h5py.File(fi, 'r')
         ifo = unicodedata.normalize('NFKD', h1.keys()[0]).encode('ascii','ignore')
         if data[0] == fi:
@@ -57,12 +57,11 @@ def load_back_data(data, params):
                             tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
                             back[label] = np.vstack((back[label], tmp_comb[label+'_new']))
                             dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
-
+    print params
     for idx,key in enumerate(params):
         if key == 'delta_chirp' or key == 'time':
             continue
         elif idx == 0:
-            print params
             back_comb = back[key]
        
         else:
@@ -147,8 +146,6 @@ def sep(trig_comb,inj_comb,indices_trig,tt_split, inj_weights):
     inj_train, inj_test = inj_comb[inj_train_idx,:], inj_comb[inj_test_idx,:]
     train_data = np.vstack((trig_train, inj_train))
     test_data = np.vstack((trig_test, inj_test))
-    train_data = train_data
-    test_data = test_data
 
     return train_data, test_data, trig_test, inj_test, inj_test_weight, inj_train_weight
 
@@ -204,49 +201,51 @@ def samp_weight(trig_comb,inj_comb,inj_train_weight,inj_test_weight):
 
     return train_weights, test_weights
 
-def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now):
+def the_machine(learning_rate, trig_comb, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now):
     print 'It\'s is alive!!!'
     model = Sequential()
     drop_rate = 0.2
-    act = keras.layers.advanced_activations.LeakyReLU(alpha=0.1)                       #LeakyReLU(alpha=0.1)
-    early_stopping = EarlyStopping(monitor='val_loss', patience=2)
+    ret_rate = 1 - drop_rate
+    act = keras.layers.advanced_activations.LeakyReLU(alpha=0.01)                       #LeakyReLU(alpha=0.1)
+    #early_stopping = EarlyStopping(monitor='val_loss', patience=2)
 
-    model.add(Dense(70, input_dim=trig_comb.shape[1])) #10
+    #7 is the number of features used. This value may change in the future
+    model.add(Dense(int(7./ret_rate), input_dim=trig_comb.shape[1])) #10
     model.add(BatchNormalization())
     act
-    model.add(Dropout(drop_rate))
+    model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(70)) #7
+    model.add(Dense(int(7./ret_rate))) #7
     model.add(BatchNormalization())
     act
-    model.add(Dropout(drop_rate))
+    model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(70)) #3
+    model.add(Dense(int(7./ret_rate))) #3
     model.add(BatchNormalization())
     act
-    model.add(Dropout(drop_rate))
+    model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(70)) #3
+    model.add(Dense(int(7./ret_rate))) #3
     model.add(BatchNormalization())
     act
-    model.add(Dropout(drop_rate))
+    model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(70)) #3
+    model.add(Dense(int(7./ret_rate))) #3
     model.add(BatchNormalization())
     act
-    model.add(Dropout(drop_rate))
+    model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(70)) #3
+    model.add(Dense(int(7./ret_rate))) #3
     model.add(BatchNormalization())
     act
-    model.add(Dropout(drop_rate))
+    model.add(GaussianDropout(drop_rate))
 
     model.add(Dense(1, init='normal'))
     model.add(Activation('sigmoid'))
 
     #Compiling model
     print("[INFO] compiling model...")
-    rmsprop = RMSprop(lr=.005)  #default is 0.001
+    rmsprop = RMSprop(lr=learning_rate)  #default is 0.001
     model.compile(loss="binary_crossentropy", optimizer=rmsprop,
             metrics=["accuracy","binary_crossentropy"], class_mode='binary')
    
@@ -256,7 +255,7 @@ def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, tr
                         sample_weight=train_weights,
                         validation_data=(test_data,lab_test,test_weights),
                         shuffle=True, show_accuracy=True)
-    print(hist.history) 
+    #print(hist.history) 
 
     # show the accuracy on the testing set
     print("[INFO] evaluating on testing set...")
@@ -272,9 +271,6 @@ def the_machine(trig_comb, nb_epoch, batch_size, train_weights, test_weights, tr
     model.summary()
 
     #Saving model to hdf file for later use
-    os.makedirs('%s/run_%s' % (out_dir,now))
-    os.makedirs('%s/run_%s/colored_plots' % (out_dir,now))
-    os.makedirs('%s/run_%s/histograms' % (out_dir,now))
     model.save('%s/run_%s/nn_model.hdf' % (out_dir,now))
     np.save('%s/run_%s/hist.npy' % (out_dir,now), hist.history)
 
@@ -327,10 +323,12 @@ def ROC_inj_and_newsnr(run_num,batch_size,trig_test,test_data,inj_test_weight,in
     pl.figure(run_num)
     pl.plot(FAP,ROC_w_sum,label='NN Score')
     pl.plot(FAP,ROC_newsnr_sum,label='New SNR')
-    pl.legend(frameon=True)
-    pl.title('ROC Curve')
-    pl.xlabel('False Alarm Probability')
-    pl.ylabel('Weighted Sum')
+    pl.ylim(ymax=1.)
+     
+    pl.legend(frameon=True, loc='lower right')
+    #pl.title('ROC Curve')
+    pl.xlabel('False alarm probability')
+    pl.ylabel('Relative detection rate')
     pl.xscale('log')
     pl.savefig('%s/run_%s/ROC_curve.png' % (out_dir,now))
     pl.close()
@@ -375,53 +373,68 @@ def ROC(inj_weight, inj_param, noise_param, out_dir, now):
 
     return ROC_sum, FAP
 
-def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data_p, params, back_test, hist, trig_test, pred_prob, pre_proc_log):
-    n_noise = len(trig_test)
-    #Loss vs. Epoch
-    print 'plotting loss vs. epoch'
-    pl.figure(run_num)
-    pl.plot(hist.history['loss'], label='Training')
-    pl.plot(hist.history['val_loss'], label='Validation')
-    pl.legend(frameon=True)
-    pl.title('Loss vs. Epoch')
-    pl.xlabel('Epoch')
-    pl.ylabel('Loss')
-    pl.yscale('log')
-    pl.savefig('%s/run_%s/loss_vs_epoch.png' % (out_dir,now))
-    pl.close()
+def feature_hists(run_num, out_dir, now, params, pre_proc_log, nn_train, nn_test, train_data, test_data):
+    print 'plotting feature histograms'
+    for idx, lab in enumerate(zip(params, pre_proc_log)):
+        for data, noise_len, dtype in zip([train_data, test_data], [nn_train, nn_test], ['train', 'test']):
+            pl.figure(run_num+idx)
+            hist_1, bins_1 = np.histogram(data[0:noise_len,idx], bins=100, density=True)
+            hist_2, bins_2 = np.histogram(data[noise_len:,idx], bins=100, density=True)
+            # print lab[0], dtype, 'bg', bins_1.min(), bins_1.max(), 'inj', bins_2.min(), bins_2.max()
+            width_1 = (bins_1[1] - bins_1[0])
+            width_2 = (bins_2[1] - bins_2[0])
+            center_1 = (bins_1[:-1] + bins_1[1:]) / 2
+            center_2 = (bins_2[:-1] + bins_2[1:]) / 2
+            pl.bar(center_1, hist_1, log=True, label='background',color='b', alpha=0.6, align='center', width=width_1)
+            pl.bar(center_2, hist_2, log=True, label='injection', color='r', alpha=0.6, align='center', width=width_2)
+            pl.ylim(ymin=1e-4)
+            pl.legend(frameon=True)
+            if lab[1]:
+               # pl.title('log(%s) histogram' % lab[0])
+                pl.xlabel('log(%s) [normalized]' % lab[0])
+            else:
+               # pl.title('%s histogram' % lab[0])
+                pl.xlabel('%s [normalized]' % lab[0])
+            pl.savefig('%s/run_%s/histograms/%s_%s.png' % (out_dir, now, lab[0], dtype))
+            pl.close()
 
-    #Accuracy vs. Epoch
-    print 'plotting accuracy vs. epoch'
-    pl.figure(run_num)
-    pl.plot(hist.history['acc'], label='Training')
-    pl.plot(hist.history['val_acc'], label='Validation')
-    pl.legend(frameon=True)
-    pl.title('Accuracy vs. Epoch')
-    pl.xlabel('Epoch')
-    pl.ylabel('Accuracy')
-    pl.savefig('%s/run_%s/acc_vs_epoch.png' % (out_dir,now))
-    pl.close()
+def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data_p, params, back_test, hist, pred_prob, pre_proc_log):
 
-    #Add in hist of score values here.
+    print 'plotting training metrics'
+    print hist.history.keys()
+    for i, metric in enumerate(['loss', 'acc', 'binary_crossentropy']):
+        mname = metric.replace('acc', 'accuracy')
+        pl.figure(run_num+i)
+        pl.plot(hist.history[metric], label='Training', alpha=0.4)
+        pl.plot(hist.history['val_'+metric], label='Validation', alpha=0.4)
+        pl.legend(frameon=True, loc='center right')
+        pl.xlabel('Epoch')
+        pl.ylabel(mname.replace('_', ' '))
+        pl.ylim(ymin=0.)
+        pl.savefig('%s/run_%s/%s_vs_epoch.png' % (out_dir, now, mname[0:4]))
+        pl.close()
+
     print 'plotting histograms of score values'
-    pl.figure(run_num)
+    pl.figure(run_num+2)
     numpy_hist_1, bins_1 = np.histogram(prob_sort_noise, bins=100, density=True)
     numpy_hist_2, bins_2 = np.histogram(prob_sort_inj, bins=100, density=True)
-    width_1 = 0.7 * (bins_1[1] - bins_1[0])
-    width_2 = 0.7 * (bins_2[1] - bins_2[0])
+    width_1 = (bins_1[1] - bins_1[0])
+    width_2 = (bins_2[1] - bins_2[0])
     center_1 = (bins_1[:-1] + bins_1[1:]) / 2
     center_2 = (bins_2[:-1] + bins_2[1:]) / 2
-    pl.bar(center_1, numpy_hist_1, label='background', alpha=0.4, align='center', width=width_1)
-    pl.bar(center_2, numpy_hist_2, label='injection', alpha=0.4, align='center', width=width_2)
+    pl.bar(center_1, numpy_hist_1, log=True, label='background',color='b', alpha=0.6, align='center', width=width_1)
+    pl.bar(center_2, numpy_hist_2, log=True, label='injection', color='r', alpha=0.6, align='center', width=width_2)
+    pl.ylim(ymin=1e-4)
     pl.legend(frameon=True)
     pl.savefig('%s/run_%s/score_hist.png' % (out_dir,now))
     pl.close()
 
+    n_noise = len(back_test)
     for idx,lab in enumerate(zip(params,pre_proc_log)):
         print('plotting score vs. %s' % lab[0])
-        pl.figure(run_num)
-        pl.scatter(test_data_p[0:n_noise,idx],pred_prob[0:n_noise],marker="o",s=10,label='background',alpha=0.4)
-        pl.scatter(test_data_p[n_noise:,idx],pred_prob[n_noise:],marker="^",s=10,label='injection',alpha=0.4)
+        pl.figure(run_num+idx)
+        pl.scatter(test_data_p[0:n_noise,idx],pred_prob[0:n_noise],marker="o", s=8,c='k',edgecolor='none',label='background',alpha=0.3)
+        pl.scatter(test_data_p[n_noise:,idx], pred_prob[n_noise:], marker="^",s=10,c='r',edgecolor='none',label='injection', alpha=0.4)
         pl.legend(frameon=True)
         if lab[1] == True:
             pl.title('Score vs. log(%s)' % lab[0])
@@ -430,57 +443,38 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
             pl.title('Score vs. %s' % lab[0])
             pl.xlabel('%s' % lab[0])
         pl.ylabel('Score')
+        pl.ylim(0,1)
         pl.savefig('%s/run_%s/score_vs_%s.png' % (out_dir,now,lab[0]))
         pl.close()
-
-        print('plotting %s histogram' % lab[0])
-        pl.figure(run_num)
-        numpy_hist_1, bins_1 = np.histogram(test_data_p[0:n_noise,idx], bins=100, density=True)
-        numpy_hist_2, bins_2 = np.histogram(test_data_p[n_noise:,idx], bins=100, density=True)
-        width_1 = 0.7 * (bins_1[1] - bins_1[0])
-        width_2 = 0.7 * (bins_2[1] - bins_2[0])
-        center_1 = (bins_1[:-1] + bins_1[1:]) / 2
-        center_2 = (bins_2[:-1] + bins_2[1:]) / 2
-        pl.bar(center_1, numpy_hist_1, label='background', alpha=0.4, align='center', width=width_1)
-        pl.bar(center_2, numpy_hist_2, label='injection', alpha=0.4, align='center', width=width_2)
-        pl.legend(frameon=True)
-        if lab[1] == True:
-            pl.title('log(%s) histogram' % lab[0])
-            pl.xlabel('log(%s)' % lab[0])
-        else:
-            pl.title('%s histogram' % lab[0])
-            pl.xlabel('%s' % lab[0])
-        pl.savefig('%s/run_%s/histograms/%s.png' % (out_dir,now,lab[0]))
-        pl.close()
-
+      
         for idx2,lab2 in enumerate(zip(params,pre_proc_log)):
-             if lab[0] == lab2[0]:
-                 continue
-             else:
-                 print('plotting %s vs. %s' % (lab2[0],lab[0]))
+             if lab[0] > lab2[0]:
+                 print('plotting %s vs. %s' % (lab2[0], lab[0]))
                  pl.figure(run_num)
-                 pl.scatter(test_data_p[0:n_noise,idx],test_data_p[0:n_noise,idx2],c=pred_prob[0:n_noise],marker="o",s=10,label='background', alpha=0.4)
-                 pl.scatter(test_data_p[n_noise:,idx],test_data_p[n_noise:,idx2],c=pred_prob[n_noise:],marker="^",s=10,label='injection', alpha=0.4)
+                 pl.scatter(test_data_p[0:n_noise,idx],test_data_p[0:n_noise,idx2],c=pred_prob[0:n_noise],marker="o",s=10,edgecolor='none',label='background',alpha=0.4)
+                 pl.scatter(test_data_p[n_noise:,idx], test_data_p[n_noise:,idx2], c=pred_prob[n_noise:], marker="^",s=10,edgecolor='none',label='injection', alpha=0.4)
                  pl.legend(frameon=True)
                  if lab2[1] == True and lab[1] == True:
-                     pl.title('log(%s) vs. log(%s)' % (lab2[0],lab[0]))
+                     pl.title('log(%s) vs. log(%s)' % (lab2[0], lab[0]))
                      pl.xlabel('log(%s)' % lab[0])
                      pl.ylabel('log(%s)' % lab2[0])
                  elif lab2[1] == True and lab[1] == False:
-                     pl.title('log(%s) vs. %s' % (lab2[0],lab[0]))
+                     pl.title('log(%s) vs. %s' % (lab2[0], lab[0]))
                      pl.xlabel('%s' % lab[0])
                      pl.ylabel('log(%s)' % lab2[0])
                  elif lab2[1] == False and lab[1] == True:
-                     pl.title('%s vs. log(%s)' % (lab2[0],lab[0]))
+                     pl.title('%s vs. log(%s)' % (lab2[0], lab[0]))
                      pl.xlabel('log(%s)' % lab[0])
                      pl.ylabel('%s' % lab2[0])
                  elif lab2[1] == False and lab[1] == False:
-                     pl.title('%s vs. %s' % (lab2[0],lab[0]))
+                     pl.title('%s vs. %s' % (lab2[0], lab[0]))
                      pl.xlabel('%s' % lab[0])
                      pl.ylabel('%s' % lab2[0])
                  pl.colorbar()
                  pl.savefig('%s/run_%s/colored_plots/%s_vs_%s.png' % (out_dir,now,lab2[0],lab[0]))
-                 pl.close() 
+                 pl.close()
+             else:
+                 continue
 
 def alex_invest(inj_test_weights,inj_test,pred_prob):
     newsnr_thresh = 10
@@ -494,45 +488,53 @@ def main():
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     session = tf.Session(config=config)
-    #Use seed value of 32 for testing purposes
-    np.random.seed(seed = 32)
+    #don't Use seed value of 32 for testing purposes
+    #np.random.seed(seed = 32)
 
     #Get Current time
     cur_time = datetime.datetime.now()       #Get current time for time stamp labels
 
     #construct the argument parse and parse the arguments
     ap = argparse.ArgumentParser()
-    ap.add_argument("-d", "--dataset", required=True, nargs='+', type=str,
-            help="path to directory containing datasets for each chunk (e.g. path/to/data/chunk*/*.hdf)")
-    ap.add_argument("-b", "--back_dataset", required=True, nargs='+', type=str,
-            help="path to one dataset file from each chunk you are running over (e.g. data/O1/L1/chunk*/BBH01.hdf)")
-    ap.add_argument("-o", "--output_dir", required=True, type=str,
+    ap.add_argument("-d", "--inj-files", required=True, nargs='+', type=str,
+            help="path to injection HDF files")
+    ap.add_argument("-b", "--bg-files", required=True, nargs='+', type=str,
+            help="path to background HDF files [currently, one inj file per chunk is used as source of bg data])")
+    ap.add_argument("-o", "--output-dir", required=True, type=str,
             help="path to output directory")
-    ap.add_argument("-t", "--train_perc", required=False, default=0.5, type=float,
-            help="Percentage of triggers you want to train. Remaining percentage will be set aside for testing")
-    ap.add_argument("-e", "--nb_epoch", required=False, default=100, type=int,
-            help="Number of Epochs")
-    ap.add_argument("-bs", "--batch_size", required=False, default=32, type=int,
-            help="Batch size for the training process (e.g. number of samples to introduce to network at any given epoch)")
+    ap.add_argument("-t", "--train-perc", required=False, default=0.5, type=float,
+            help="Fraction of triggers you want to train (between 0 and 1). Remaining triggers will be used for testing. Default 0.5")
+    ap.add_argument("-e", "--nb-epoch", required=False, default=100, type=int,
+            help="Number of epochs. Default 100")
+    ap.add_argument("-bs", "--batch-size", required=False, default=32, type=int,
+            help="Batch size for the training process (number of samples to use in each gradient descent step). Default 32")
     ap.add_argument("-u", "--usertag", required=False, default=cur_time, type=str,
             help="label for given run")
-    ap.add_argument("-r", "--run_number", required=False, default=0, type=int,
+    ap.add_argument("-r", "--run-number", required=False, default=0, type=int,
             help="If performing multiple runs on same machine, specify a unique number for each run (must be greater than zero)")
-    args = vars(ap.parse_args())
+    ap.add_argument("--learning-rate", type=float, default=0.01,
+        help="Learning rate. Default 0.01")
+    ap.add_argument("--dropout-fraction", type=float, default=0.,
+        help="Amount of Gaussian dropout noise to use in training. Default 0 (no noise)")
+    args = ap.parse_args()
 
     #Initializing parameters
-    data_files = args['dataset']
-    back_files = args['back_dataset']
-    out_dir = args['output_dir']
+    data_files = args.inj_files
+    back_files = args.bg_files
+    out_dir = args.output_dir
     #now = datetime.datetime.now()       #Get current time for time stamp labels
-    now = args['usertag']
+    now = args.usertag
+    os.makedirs('%s/run_%s' % (out_dir,now))  # Fail early if the dir already exists
+    os.makedirs('%s/run_%s/colored_plots' % (out_dir,now))
+    os.makedirs('%s/run_%s/histograms' % (out_dir,now))
+
     back_params = ['marg_l','count','maxnewsnr','maxsnr','ratio_chirp','delT','template_duration','delta_chirp','time']
     inj_params = ['marg_l_inj','count_inj','maxnewsnr_inj','maxsnr_inj','ratio_chirp_inj','delT_inj','template_duration_inj','dist_inj','delta_chirp_inj','time_inj']
     pre_proc_log = [True,True,True,True,True,False,True] #True means to take log of feature, False means don't take log of feature during pre-processing
-    tt_split = args['train_perc']
-    nb_epoch = args['nb_epoch']
-    batch_size = args['batch_size']
-    run_num = args['run_number']
+    tt_split = args.train_perc
+    nb_epoch = args.nb_epoch
+    batch_size = args.batch_size
+    run_num = args.run_number
 
     #Downloading background and injection triggers
     back_trig, dict_comb = load_back_data(back_files, back_params)
@@ -555,18 +557,22 @@ def main():
 
     #making labels (zero is noise, one is injection)...better label maker than one you could buy at costco in my opinion
     lab_train, lab_test, labels_all = costco_label_maker(back_trig, inj_trig, tt_split)
+    print len(lab_train), len(lab_test), len(labels_all)
 
     #Creating sample weights vector
     train_weights, test_weights = samp_weight(back_trig, inj_trig, inj_train_weight, inj_test_weight)
 
+    #Plot histograms of features
+    feature_hists(run_num, out_dir, now, back_params[:len(back_params)-2], pre_proc_log, sum(lab_train.flatten() == 0), len(back_test), train_data, test_data)
+
     #training/testing on deep neural network
-    res_pre, eval_results, hist, model = the_machine(back_trig, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
+    res_pre, eval_results, hist, model = the_machine(args.learning_rate, back_trig, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
     
     #Compute the ROC curve
     ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob, prob_sort_noise, prob_sort_inj = ROC_inj_and_newsnr(run_num,batch_size,back_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model)
 
     #Score/histogram plots
-    main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data, back_params[:len(back_params)-2], back_test, hist, back_test, pred_prob, pre_proc_log)
+    main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data, back_params[:len(back_params)-2], back_test, hist, pred_prob, pre_proc_log)
 
     #Write data to an hdf file
     with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
