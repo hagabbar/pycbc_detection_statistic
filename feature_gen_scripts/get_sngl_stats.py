@@ -12,7 +12,7 @@ import pycbc
 from scipy.misc import logsumexp
 from pycbc import events, init_logging, pnutils
 import sympy
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import scipy.integrate as integrate
 import scipy.special as special
 from math import log
@@ -21,7 +21,7 @@ import pycbc
 from pycbc import events
 import sympy
 from pycbc.types import MultiDetOptionAction
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 
 parser = argparse.ArgumentParser()
@@ -40,6 +40,7 @@ parser.add_argument('--inj-file')
 parser.add_argument('--inj-coinc-file')
 parser.add_argument('--ifar-thresh')
 parser.add_argument('--temp-bank')
+parser.add_argument('--just-inj', type=str, default = 'False')
 
 args = parser.parse_args()
 pycbc.init_logging(args.verbose)
@@ -77,25 +78,10 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
         dist_injc = dist_injc[injection_index_injc] 
         
 	del ifar_injc
-
-        time = f['end_time'][:]
-        snr = f['snr'][:]
-        template_dur = f['template_duration'][:]
-	template_id = f['template_id'][:]
-        chisq = f['chisq'][:]
-        chisq_dof = f['chisq_dof'][:]
-        rchisq = chisq / (2 * chisq_dof - 2)
-        del chisq
-        del chisq_dof
-	newsnr = events.newsnr(snr, rchisq)
-	del rchisq
-
-        mass1_full = mass1[template_id]
-        mass2_full = mass2[template_id]
-
-	f_inj = hf_inj[ifo]
+       
+   	f_inj = hf_inj[ifo]
 	time_inj = f_inj['end_time'][:]
-	snr_inj = f_inj['snr'][:]
+        snr_inj = f_inj['snr'][:]
         template_dur_inj = f_inj['template_duration'][:]
         template_id_inj = f_inj['template_id'][:]
 	chisq_inj = f_inj['chisq'][:]
@@ -108,6 +94,22 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
 
         mass1_inj = mass1[template_id_inj]
         mass2_inj = mass2[template_id_inj]
+
+        time = f['end_time'][:]        
+        if args.just_inj == 'False':
+            snr = f['snr'][:]
+            template_dur = f['template_duration'][:]
+            template_id = f['template_id'][:]
+            chisq = f['chisq'][:]
+            chisq_dof = f['chisq_dof'][:]
+            rchisq = chisq / (2 * chisq_dof - 2)
+            del chisq
+            del chisq_dof
+            newsnr = events.newsnr(snr, rchisq)
+            del rchisq
+
+            mass1_full = mass1[template_id]
+            mass2_full = mass2[template_id]
 
         # apply vetoes
         try: 
@@ -132,17 +134,17 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
         else:
             print "sure, it was defined"
             mask, segs = events.veto.indices_outside_segments(time, [args.veto_file], ifo=ifo,
-                segment_name=args.veto_segment_name)
-	
-	    #After retrieving clean set, iterate and sort through triggers
+                    segment_name=args.veto_segment_name)
             tsort = time[mask].argsort()
-	    print len(tsort)
-	    print len(time.argsort())
             time = time[mask][tsort]
-            snr = snr[mask][tsort]
-            template_dur = template_dur[mask][tsort]
-	    newsnr = newsnr[mask][tsort]
-            template_id = template_id[mask][tsort]
+            print len(tsort)
+            print len(time.argsort())
+            if args.just_inj == 'False':
+	        #After retrieving clean set, iterate and sort through triggers
+                snr = snr[mask][tsort]
+                template_dur = template_dur[mask][tsort]
+	        newsnr = newsnr[mask][tsort]
+                template_id = template_id[mask][tsort]
 
 	    #For injections...
 	    mask_inj, segs_inj = events.veto.indices_outside_segments(time_inj, [args.veto_file], ifo=ifo,
@@ -157,22 +159,26 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
             template_id_inj = template_id_inj[mask_inj][tsort_inj]
 
 	#Take only triggers found to be in coincidence
-        like = snr ** 2.0 / 2
-        logging.info('%s triggers', len(time))
+        if args.just_inj == 'False':
+            like = snr ** 2.0 / 2
+            logging.info('%s triggers', len(time))
 
 	like_inj = snr_inj ** 2.0 / 2
 
         # find the edges of the integral
         window_times = numpy.arange(int(time[0] / int(args.window)), int(time[-1] / int(args.window)) + 1) * int(args.window)
-	left = numpy.searchsorted(time, window_times - int(args.window))
-        right = numpy.searchsorted(time, window_times + int(args.window))
+        if args.just_inj == 'False':
+	    left = numpy.searchsorted(time, window_times - int(args.window))
+            right = numpy.searchsorted(time, window_times + int(args.window))
 
         left_inj = numpy.searchsorted(time_inj, window_times - int(args.window))
         right_inj = numpy.searchsorted(time_inj, window_times + int(args.window)) 
 
-	
+        #Initialize variables	
         margl = []
         count = []
+        count_in = []
+        count_out = []
         maxsnr = []
         maxnewsnr = []
         tmp_dur = []
@@ -180,10 +186,11 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
 	delT = []
         delta_chirp = []
         ratio_chirp = []
-        #eff_dist = []
 
 	margl_inj = []
         count_inj = []
+        count_in_inj = []
+        count_out_inj = []       
         maxsnr_inj = []
         maxnewsnr_inj = []
         tmp_dur_inj = []
@@ -194,34 +201,52 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
         dist_inj = []
         chirp_m_inj = []
 
-        for i, (l, r) in enumerate(zip(left, right)):
-            logging.info('%s: %2.1f complete', ifo, float(i) / len(right) * 100)
-            if r > l:
+        if args.just_inj == 'False':
+            for i, (l, r) in enumerate(zip(left, right)):
+                logging.info('%s: %2.1f complete', ifo, float(i) / len(right) * 100)
+                if r > l:
                 
-                t.append(window_times[i])
-                margl.append(logsumexp(like[l:r]))
-                count.append(r - l)
-                maxsnr.append(snr[l:r].max())
-		idx_mxsnr = numpy.argmax(snr[l:r])
-                maxnewsnr.append(newsnr[l:r].max())
-		idx_mxnewsnr = numpy.argmax(newsnr[l:r])
-		deltaT_trig = time[l:r][idx_mxnewsnr] - time[l:r][idx_mxsnr]
-                delT.append(deltaT_trig)
-                tmp_dur.append(template_dur[l:r][idx_mxsnr])
+                    t.append(window_times[i])
+                    margl.append(logsumexp(like[l:r]))
+                    maxsnr.append(snr[l:r].max())
+   		    idx_mxsnr = numpy.argmax(snr[l:r])
+                    maxnewsnr.append(newsnr[l:r].max())
+		    idx_mxnewsnr = numpy.argmax(newsnr[l:r])
+		    deltaT_trig = time[l:r][idx_mxnewsnr] - time[l:r][idx_mxsnr]
+                    delT.append(deltaT_trig)
+                    tmp_dur.append(template_dur[l:r][idx_mxsnr])
                 
-                
-                #determining the chirp mass
-                m1_snr = mass1_full[l:r][idx_mxsnr] 
-                m2_snr = mass2_full[l:r][idx_mxsnr]
-                m1_new_snr = mass1_full[l:r][idx_mxnewsnr]                       
-                m2_new_snr = mass2_full[l:r][idx_mxnewsnr]
-                chirp_snr = pnutils.mass1_mass2_to_mchirp_eta(m1_snr, m2_snr)
-                chirp_new_snr = pnutils.mass1_mass2_to_mchirp_eta(m1_new_snr, m2_new_snr)
+                    #Getting count values
+                    #Number of triggers in +-1s  window
+                    count.append(r - l)
+
+                    #Number of triggers within 0.1 seconds of center of window
+                    in_left = time[l:r] >= (window_times[i]-0.1)
+                    in_right = time[l:r] <= (window_times[i]+0.1)
+                    count_in.append(time[l:r][numpy.invert((in_left - in_right))].shape[0]) 
+
+                    #Number of triggers within +-1s window but also outside of +-0.1s window
+                    out_left1 = time[l:r] >= (window_times[i]-int(args.window))
+                    out_left2 = time[l:r] < (window_times[i]-0.1)
+                    out_left = time[l:r][numpy.invert((out_left1 - out_left2))].shape[0] 
+                    out_right1 = time[l:r] <= (window_times[i]+int(args.window))
+                    out_right2 = time[l:r] > (window_times[i]+0.1) 
+                    out_right = time[l:r][numpy.invert((out_right1 - out_right2))].shape[0]
+                    count_out.append(out_left + out_right)
+
+                            
+                    #determining the chirp mass
+                    m1_snr = mass1_full[l:r][idx_mxsnr] 
+                    m2_snr = mass2_full[l:r][idx_mxsnr]
+                    m1_new_snr = mass1_full[l:r][idx_mxnewsnr]                       
+                    m2_new_snr = mass2_full[l:r][idx_mxnewsnr]
+                    chirp_snr = pnutils.mass1_mass2_to_mchirp_eta(m1_snr, m2_snr)
+                    chirp_new_snr = pnutils.mass1_mass2_to_mchirp_eta(m1_new_snr, m2_new_snr)
                
 
-                #Calculating delta chirp and ratio of chirp masses
-                delta_chirp.append(log(chirp_snr[0]) - log(chirp_new_snr[0]))
-                ratio_chirp.append(chirp_snr[0]/chirp_new_snr[0])
+                    #Calculating delta chirp and ratio of chirp masses
+                    delta_chirp.append(log(chirp_snr[0]) - log(chirp_new_snr[0]))
+                    ratio_chirp.append(chirp_snr[0]/chirp_new_snr[0])
 	
 	for i, (l, r) in enumerate(zip(left_inj, right_inj)):
             logging.info('%s: %2.1f complete', ifo, float(i) / len(right_inj) * 100)
@@ -234,7 +259,6 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
             if r > l and closest_injt+0.5 >= window_times[i] and closest_injt-0.5 < window_times[i]:
                 t_inj.append(window_times[i])
                 margl_inj.append(logsumexp(like_inj[l:r]))
-                count_inj.append(r - l)
                 maxsnr_inj.append(snr_inj[l:r].max())
 		idx_mxsnr = numpy.argmax(snr_inj[l:r])
                 maxnewsnr_inj.append(newsnr_inj[l:r].max())
@@ -242,6 +266,23 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
 		deltaT_inj = time_inj[l:r][idx_mxnewsnr] - time_inj[l:r][idx_mxsnr]
                 delT_inj.append(deltaT_inj)
                 tmp_dur_inj.append(template_dur_inj[l:r][idx_mxsnr])
+
+                #Getting count values
+                count_inj.append(r - l)
+
+                #Number of triggers within 0.1 seconds of center of window
+                in_left = time_inj[l:r] >= (window_times[i]-0.1)
+                in_right = time_inj[l:r] <= (window_times[i]+0.1)
+                count_in_inj.append(time_inj[l:r][numpy.invert((in_left - in_right))].shape[0])
+
+                #Number of triggers within +-1s window but also outside of +-0.1s window
+                out_left1 = time_inj[l:r] >= (window_times[i]-int(args.window))
+                out_left2 = time_inj[l:r] < (window_times[i]-0.1)
+                out_left = time_inj[l:r][numpy.invert((out_left1 - out_left2))].shape[0]
+                out_right1 = time_inj[l:r] <= (window_times[i]+int(args.window))
+                out_right2 = time_inj[l:r] > (window_times[i]+0.1)
+                out_right = time_inj[l:r][numpy.invert((out_right1 - out_right2))].shape[0]
+                count_out_inj.append(out_left + out_right)
 
 		#determining the chirp mass
 	        m1_snr = mass1_inj[l:r][idx_mxsnr]
@@ -261,27 +302,31 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
 
         o['%s/chirp_m_inj' % ifo] = numpy.array(chirp_m_inj)
         o['%s/dist_inj' % ifo] = numpy.array(dist_inj)
-	o['%s/delta_chirp' % ifo] = numpy.array(delta_chirp)
 	o['%s/delta_chirp_inj' % ifo] = numpy.array(delta_chirp_inj)
-        o['%s/delT' % ifo] = numpy.array(delT)
         o['%s/delT_inj' % ifo] = numpy.array(delT_inj)
-        o['%s/ratio_chirp' % ifo] = numpy.array(ratio_chirp)
         o['%s/ratio_chirp_inj' % ifo] = numpy.array(ratio_chirp_inj)       
-        o['%s/time' % ifo] = numpy.array(t)
-        o['%s/marg_l' % ifo] = numpy.array(margl)
-        o['%s/count' % ifo] = numpy.array(count)
-        o['%s/maxsnr' % ifo] = numpy.array(maxsnr)
-        o['%s/maxnewsnr' % ifo] = numpy.array(maxnewsnr)
 	o['%s/time_inj' % ifo] = numpy.array(t_inj)
         o['%s/marg_l_inj' % ifo] = numpy.array(margl_inj)
         o['%s/count_inj' % ifo] = numpy.array(count_inj)
+        o['%s/count_in_inj' % ifo] = numpy.array(count_in_inj)
+        o['%s/count_out_inj' % ifo] = numpy.array(count_out_inj)
         o['%s/maxsnr_inj' % ifo] = numpy.array(maxsnr_inj)
         o['%s/maxnewsnr_inj' % ifo] = numpy.array(maxnewsnr_inj)
-        o['%s/template_duration' % ifo] = numpy.array(tmp_dur)
         o['%s/template_duration_inj' % ifo] = numpy.array(tmp_dur_inj)
 
-
-
+        if args.just_inj == 'False':
+            o['%s/delT' % ifo] = numpy.array(delT)
+            o['%s/ratio_chirp' % ifo] = numpy.array(ratio_chirp)   
+            o['%s/delta_chirp' % ifo] = numpy.array(delta_chirp)
+            o['%s/time' % ifo] = numpy.array(t)
+            o['%s/marg_l' % ifo] = numpy.array(margl)
+            o['%s/count' % ifo] = numpy.array(count)
+            o['%s/count_in' % ifo] = numpy.array(count_in)
+            o['%s/count_out' % ifo] = numpy.array(count_out)
+            o['%s/maxsnr' % ifo] = numpy.array(maxsnr)
+            o['%s/maxnewsnr' % ifo] = numpy.array(maxnewsnr)
+            o['%s/template_duration' % ifo] = numpy.array(tmp_dur)
+ 
 print "Forget the coincs, I'm outta here"
 exit()
 

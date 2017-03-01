@@ -210,32 +210,32 @@ def the_machine(learning_rate, trig_comb, nb_epoch, batch_size, train_weights, t
     #early_stopping = EarlyStopping(monitor='val_loss', patience=2)
 
     #7 is the number of features used. This value may change in the future
-    model.add(Dense(int(7./ret_rate), input_dim=trig_comb.shape[1])) #10
+    model.add(Dense(int(9./ret_rate), input_dim=trig_comb.shape[1])) #10
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(int(7./ret_rate))) #7
+    model.add(Dense(int(9./ret_rate))) #7
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(int(7./ret_rate))) #3
+    model.add(Dense(int(9./ret_rate))) #3
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(int(7./ret_rate))) #3
+    model.add(Dense(int(9./ret_rate))) #3
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(int(7./ret_rate))) #3
+    model.add(Dense(int(9./ret_rate))) #3
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(int(7./ret_rate))) #3
+    model.add(Dense(int(9./ret_rate))) #3
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
@@ -528,9 +528,9 @@ def main():
     os.makedirs('%s/run_%s/colored_plots' % (out_dir,now))
     os.makedirs('%s/run_%s/histograms' % (out_dir,now))
 
-    back_params = ['marg_l','count','maxnewsnr','maxsnr','ratio_chirp','delT','template_duration','delta_chirp','time']
-    inj_params = ['marg_l_inj','count_inj','maxnewsnr_inj','maxsnr_inj','ratio_chirp_inj','delT_inj','template_duration_inj','dist_inj','delta_chirp_inj','time_inj']
-    pre_proc_log = [True,True,True,True,True,False,True] #True means to take log of feature, False means don't take log of feature during pre-processing
+    back_params = ['marg_l','count_in','maxnewsnr','maxsnr','ratio_chirp','delT','template_duration','count_out','delta_chirp','time']
+    inj_params = ['marg_l_inj','count_in_inj','maxnewsnr_inj','maxsnr_inj','ratio_chirp_inj','delT_inj','template_duration_inj','count_out_inj','dist_inj','delta_chirp_inj','time_inj']
+    pre_proc_log = [True,True,True,True,True,False,True,False] #True means to take log of feature, False means don't take log of feature during pre-processing
     tt_split = args.train_perc
     nb_epoch = args.nb_epoch
     batch_size = args.batch_size
