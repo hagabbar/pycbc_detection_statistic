@@ -7,7 +7,7 @@ Required Dependencies: keras, tensorflow, matplotlib, numpy, h5py, pycbc, scipy,
 If you want to use just one GPU for a run then you must set the following environment variable to your desired GPU number <br />
 export CUDA_VISIBLE_DEVICES="1"
 
-If you want to produce features only for injections rather than for both injections and background triggers, then set the --just-inj argument to "True".
+If you want to produce features only for injections rather than for both injections and background triggers, then set the --just-inj argument to "True" (MUST have a capital letter in front).
 
 
 
