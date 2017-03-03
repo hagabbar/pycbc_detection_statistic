@@ -210,32 +210,32 @@ def the_machine(learning_rate, trig_comb, nb_epoch, batch_size, train_weights, t
     #early_stopping = EarlyStopping(monitor='val_loss', patience=2)
 
     #7 is the number of features used. This value may change in the future
-    model.add(Dense(int(9./ret_rate), input_dim=trig_comb.shape[1])) #10
+    model.add(Dense(int(8./ret_rate), input_dim=trig_comb.shape[1])) #10
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(int(9./ret_rate))) #7
+    model.add(Dense(int(8./ret_rate))) #7
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(int(9./ret_rate))) #3
+    model.add(Dense(int(8./ret_rate))) #3
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(int(9./ret_rate))) #3
+    model.add(Dense(int(8./ret_rate))) #3
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(int(9./ret_rate))) #3
+    model.add(Dense(int(8./ret_rate))) #3
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))
 
-    model.add(Dense(int(9./ret_rate))) #3
+    model.add(Dense(int(8./ret_rate))) #3
     model.add(BatchNormalization())
     act
     model.add(GaussianDropout(drop_rate))

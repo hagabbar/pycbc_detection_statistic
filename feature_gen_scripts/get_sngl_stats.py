@@ -221,16 +221,16 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
                     count.append(r - l)
 
                     #Number of triggers within 0.1 seconds of center of window
-                    in_left = time[l:r] >= (window_times[i]-0.1)
-                    in_right = time[l:r] <= (window_times[i]+0.1)
+                    in_left = time[l:r] >= (time[l:r][idx_mxsnr]-0.1)
+                    in_right = time[l:r] <= (time[l:r][idx_mxsnr]+0.1)
                     count_in.append(time[l:r][numpy.invert((in_left - in_right))].shape[0]) 
 
                     #Number of triggers within +-1s window but also outside of +-0.1s window
-                    out_left1 = time[l:r] >= (window_times[i]-int(args.window))
-                    out_left2 = time[l:r] < (window_times[i]-0.1)
+                    out_left1 = time[l:r] >= (time[l:r][idx_mxsnr]-int(args.window))
+                    out_left2 = time[l:r] < (time[l:r][idx_mxsnr]-0.1)
                     out_left = time[l:r][numpy.invert((out_left1 - out_left2))].shape[0] 
-                    out_right1 = time[l:r] <= (window_times[i]+int(args.window))
-                    out_right2 = time[l:r] > (window_times[i]+0.1) 
+                    out_right1 = time[l:r] <= (time[l:r][idx_mxsnr]+int(args.window))
+                    out_right2 = time[l:r] > (time[l:r][idx_mxsnr]+0.1) 
                     out_right = time[l:r][numpy.invert((out_right1 - out_right2))].shape[0]
                     count_out.append(out_left + out_right)
 
@@ -271,16 +271,16 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
                 count_inj.append(r - l)
 
                 #Number of triggers within 0.1 seconds of center of window
-                in_left = time_inj[l:r] >= (window_times[i]-0.1)
-                in_right = time_inj[l:r] <= (window_times[i]+0.1)
+                in_left = time_inj[l:r] >= (time_inj[l:r][idx_mxsnr]-0.1)
+                in_right = time_inj[l:r] <= (time_inj[l:r][idx_mxsnr]+0.1)
                 count_in_inj.append(time_inj[l:r][numpy.invert((in_left - in_right))].shape[0])
 
                 #Number of triggers within +-1s window but also outside of +-0.1s window
-                out_left1 = time_inj[l:r] >= (window_times[i]-int(args.window))
-                out_left2 = time_inj[l:r] < (window_times[i]-0.1)
+                out_left1 = time_inj[l:r] >= (time_inj[l:r][idx_mxsnr]-int(args.window))
+                out_left2 = time_inj[l:r] < (time_inj[l:r][idx_mxsnr]-0.1)
                 out_left = time_inj[l:r][numpy.invert((out_left1 - out_left2))].shape[0]
-                out_right1 = time_inj[l:r] <= (window_times[i]+int(args.window))
-                out_right2 = time_inj[l:r] > (window_times[i]+0.1)
+                out_right1 = time_inj[l:r] <= (time_inj[l:r][idx_mxsnr]+int(args.window))
+                out_right2 = time_inj[l:r] > (time_inj[l:r][idx_mxsnr]+0.1)
                 out_right = time_inj[l:r][numpy.invert((out_right1 - out_right2))].shape[0]
                 count_out_inj.append(out_left + out_right)
 
