@@ -1,6 +1,6 @@
-#Simple Multilayer Neural Network to seperate pycbc injections from noise triggers
+#Simple Multilayer Neural Network to separate pycbc injections from noise triggers
 #Author: Hunter Gabbard
-#Max Planck Insitute for Gravitational Physics
+#Max Planck Institute for Gravitational Physics
 #How to use only one GPU device....export CUDA_VISIBLE_DEVICES="0" in command line prior to run
 #How to run in the background from the command line...python simple_neural_network.py -d NSBH01_ifar0-1.hdf,NSBH02_ifar0-1.hdf >/dev/null 2>err.txt &
 
@@ -8,14 +8,11 @@ from __future__ import division
 import argparse
 import keras
 from keras.models import Sequential
-from keras.layers import LSTM, Dense
 import numpy as np
 import h5py
-from keras.models import Sequential
-from keras.layers import Dense, Activation, GaussianDropout, Dropout, ActivityRegularization
-from keras.optimizers import RMSprop
+from keras.layers import Dense, Activation, Dropout, GaussianDropout, ActivityRegularization
+from keras.optimizers import SGD, RMSprop
 from keras.layers.normalization import BatchNormalization
-import sys
 import os
 from math import exp, log
 import tensorflow as tf
@@ -27,243 +24,219 @@ import datetime
 import unicodedata
 
 
-#Definition for loading in dataset parameters into variables and then combine into a numpy array
+# Load in dataset parameters and combine into a numpy array
 def load_back_data(data, params):
     print 'loading background triggers'
     dict_comb = {}
     back = {}
     tmp_comb = {}
-    for fi in data:
+    for i, fi in enumerate(data):
         print fi
         h1 = h5py.File(fi, 'r')
         ifo = unicodedata.normalize('NFKD', h1.keys()[0]).encode('ascii','ignore')
-        if data[0] == fi:
-            for label in h1['%s' % ifo].keys():
-                for key in params:
-                    if label == key:
-                        if key == 'delta_chirp' or key == 'time':
-                            dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                        else:
-                            dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                            back[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+        # set up original array
+        if i == 0:
+            for key in params:
+                dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                back[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
         else:
-            for label in h1['%s' % ifo].keys():
-                for key in params:
-                    if label == key:
-                        if key == 'delta_chirp' or key == 'time':
-                            tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                            dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
-                        else:                   
-                            tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                            back[label] = np.vstack((back[label], tmp_comb[label+'_new']))
-                            dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
-    print params
-    for idx,key in enumerate(params):
-        if key == 'delta_chirp' or key == 'time':
-            continue
-        elif idx == 0:
+            # stack on additional data
+            for key in params:
+                tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                back[key] = np.vstack((back[key], tmp_comb[key+'_new']))
+                dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
+
+    for idx, key in enumerate(params):
+        print key
+        if idx == 0:
             back_comb = back[key]
-       
         else:
-            back_comb = np.hstack((back_comb,back[key]))
+            back_comb = np.hstack((back_comb, back[key]))
+
     return back_comb, dict_comb
 
-#Load CBC/noise triggers from multiple data sets
+#Load injection triggers from multiple data sets
 def load_inj_data(data, params, dict_comb):
     tmp_comb = {}
     inj = {}
     print 'loading injections'
-    for fi in data:
+    for i, fi in enumerate(data):
+        print fi
         h1 = h5py.File(fi, 'r')
         ifo = unicodedata.normalize('NFKD', h1.keys()[0]).encode('ascii','ignore')
-        if data[0] == fi:
-            for label in h1['%s' % ifo].keys():
-                for key in params:
-                    if label == key:
-                        if key == 'delta_chirp_inj' or key == 'time_inj' or key == 'dist_inj':
-                            dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                        else:
-                            dict_comb[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                            inj[label] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
+        if i == 0:
+            for key in params:
+                # treat inj distance differently
+                if key == 'dist_inj':
+                    dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                else:
+                    dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                    inj[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
         else:
-            for label in h1['%s' % ifo].keys():
-                for key in params:
-                    if label == key:
-                        if key == 'delta_chirp_inj' or key == 'time_inj' or key == 'dist_inj':
-                            tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                            dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
-                        else:
-                            tmp_comb[label+'_new'] = np.asarray(h1['%s/%s' % (ifo,label)][:]).reshape((h1['%s/%s' % (ifo,label)].shape[0],1))
-                            inj[label] = np.vstack((inj[label], tmp_comb[label+'_new']))
-                        dict_comb[label] = np.vstack((dict_comb[label], tmp_comb[label+'_new']))
+            for key in params:
+                if key == 'dist_inj':  # distance goes into dict_comb but not into inj_comb
+                    tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                    dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
+                else:
+                    tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                    inj[key] = np.vstack((inj[key], tmp_comb[key+'_new']))
+                    dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
 
-    for idx,key in enumerate(params):
-        if key  == 'delta_chirp_inj' or key == 'time_inj' or key == 'dist_inj':
+    for idx, key in enumerate(params):
+        print key
+        if key == 'dist_inj':
             continue
         elif idx == 0:
-            print params
             inj_comb = inj[key]
         else:
-            inj_comb = np.hstack((inj_comb,inj[key]))
+            inj_comb = np.hstack((inj_comb, inj[key]))
     return inj_comb, dict_comb
 
 #Generate injection weights
 def inj_weight_calc(dict_comb):
     print 'calculating injection weights'
     inj_weights_pre = []
-    np.asarray(inj_weights_pre)
     dist_inj = dict_comb['dist_inj']
-    dist_inj_mean = (dist_inj**2).mean()
-    for idx in enumerate(dict_comb['delta_chirp_inj']):
-        idx = idx[0]
-        inj_weights_pre.append((dist_inj[idx][0]**2)/dist_inj_mean)
+    w_mean = (dist_inj**2).mean()
+    #print dict_comb['maxsnr_inj']
+    for idx, val in enumerate(dict_comb['maxsnr_inj']):
+        inj_weights_pre.append((dist_inj[idx][0] ** 2) / w_mean)
 
-    inj_weights = np.asarray(inj_weights_pre).reshape((dict_comb['delta_chirp_inj'].shape[0],1))
+    return np.asarray(inj_weights_pre).reshape((dict_comb['maxsnr_inj'].shape[0],1))
 
-    return inj_weights
-
-def orig_norm(back_trig, inj_trig, tt_split):
+def orig_norm(bg_trig, inj_trig, tt_split):
     print 'storing original trigger values prior to normalization'
-    comb_all = np.vstack((back_trig, inj_trig))
-    indices_trig = np.random.permutation(back_trig.shape[0])
-    trig_train_idx, trig_test_idx = indices_trig[:int(back_trig.shape[0]*tt_split)], indices_trig[int(back_trig.shape[0]*tt_split):int(back_trig.shape[0])]
-    trig_train_p, trig_test_p = back_trig[trig_train_idx,:], back_trig[trig_test_idx,:]
-    indices_inj = np.random.permutation(inj_trig.shape[0])
-    inj_train_idx, inj_test_idx = indices_inj[:int(inj_trig.shape[0]*tt_split)], indices_inj[int(inj_trig.shape[0]*tt_split):]
+    n_bg, n_inj = bg_trig.shape[0], inj_trig.shape[0]
+    comb_all = np.vstack((bg_trig, inj_trig))
+    indices_bg = np.random.permutation(n_bg)
+    bg_train_idx, bg_test_idx = indices_bg[:int(n_bg * tt_split)], indices_bg[int(n_bg * tt_split):int(n_bg)] # WHY LAST INDEX NEEDED?
+    bg_train_p, bg_test_p = bg_trig[bg_train_idx,:], bg_trig[bg_test_idx,:]
+    indices_inj = np.random.permutation(n_inj)
+    inj_train_idx, inj_test_idx = indices_inj[:int(n_inj * tt_split)], indices_inj[int(n_inj * tt_split):]
     inj_train_p, inj_test_p = inj_trig[inj_train_idx,:], inj_trig[inj_test_idx,:]
-    train_data_p = np.vstack((trig_train_p, inj_train_p))
-    test_data_p = np.vstack((trig_test_p, inj_test_p))
+    train_data_p = np.vstack((bg_train_p, inj_train_p))
+    test_data_p = np.vstack((bg_test_p, inj_test_p))
 
     return train_data_p, test_data_p, comb_all
 
-def sep(trig_comb,inj_comb,indices_trig,tt_split, inj_weights):
-    print 'seperating into training/testing sets'
-    trig_train_idx, trig_test_idx = indices_trig[:int(trig_comb.shape[0]*tt_split)], indices_trig[int(trig_comb.shape[0]*tt_split):int(trig_comb.shape[0])]
-    trig_train, trig_test = trig_comb[trig_train_idx,:], trig_comb[trig_test_idx,:]
-    indices_inj = np.random.permutation(inj_comb.shape[0])
-    inj_train_idx, inj_test_idx = indices_inj[:int(inj_comb.shape[0]*tt_split)], indices_inj[int(inj_comb.shape[0]*tt_split):]
+def sep(bg_comb, inj_comb, indices_bg, tt_split, inj_weights):
+    print 'separating into training/testing sets'
+    n_bg, n_inj = bg_comb.shape[0], inj_comb.shape[0]
+    bg_train_idx, bg_test_idx = indices_bg[:int(n_bg * tt_split)], indices_bg[int(n_bg * tt_split):int(n_bg)]  # WHY LAST INDEX NEEDED?
+    bg_train, bg_test = bg_comb[bg_train_idx,:], bg_comb[bg_test_idx,:]
+    indices_inj = np.random.permutation(n_inj)
+    inj_train_idx, inj_test_idx = indices_inj[:int(n_inj * tt_split)], indices_inj[int(n_inj * tt_split):]
     inj_train_weight, inj_test_weight = inj_weights[inj_train_idx,:], inj_weights[inj_test_idx,:]
     inj_train, inj_test = inj_comb[inj_train_idx,:], inj_comb[inj_test_idx,:]
-    train_data = np.vstack((trig_train, inj_train))
-    test_data = np.vstack((trig_test, inj_test))
+    train_data = np.vstack((bg_train, inj_train))
+    test_data = np.vstack((bg_test, inj_test))
 
-    return train_data, test_data, trig_test, inj_test, inj_test_weight, inj_train_weight
+    return train_data, test_data, bg_test, inj_test, inj_test_weight, inj_train_weight
 
-def normalize(trig_comb,comb_all,pre_proc_log):
-    print 'normalizing features'
-    for idx in range(0,comb_all.shape[1]):
+def normalize(comb_all, pre_proc_log, n_bg):
+    print 'normalizing (and logging some) features'
+    for idx in range(0, comb_all.shape[1]):
+       vals = comb_all[:,idx]
+
        if pre_proc_log[idx] == True:
-           if idx == 0:
-               tmp_trig_comb = ((np.log(comb_all[:,idx]) - np.log(comb_all[:,idx]).mean())/np.log(comb_all[:,idx]).max()).reshape((comb_all.shape[0],1))
-               tmp_inj_comb = tmp_trig_comb[trig_comb.shape[0]:]           
-               tmp_trig_comb = tmp_trig_comb[0:trig_comb.shape[0]]
-               continue
-           else:
-               tmp = ((np.log(comb_all[:,idx]) - np.log(comb_all[:,idx]).mean())/np.log(comb_all[:,idx]).max()).reshape((comb_all.shape[0],1))
-       elif pre_proc_log[idx] == False:
-           if idx == 0:
-               tmp_trig_comb = ((comb_all[:,idx] - comb_all[:,idx].mean())/comb_all[:,idx].max()).reshape((comb_all.shape[0],1))
-               tmp_inj_comb = tmp_trig_comb[trig_comb.shape[0]:]
-               tmp_trig_comb = tmp_trig_comb[0:trig_comb.shape[0]]
-               continue
-           else:
-               tmp = ((comb_all[:,idx] - comb_all[:,idx].mean())/comb_all[:,idx].max()).reshape((comb_all.shape[0],1))
+           # hack +1 to allow us to take log of count_out
+           if vals.min() <= 0:
+               print 'Adding 1 to a feature where some values are 0 or negative, index', idx
+               vals = vals + 1
+           vals = np.log(vals)
 
-       tmp_trig_comb = np.hstack((tmp_trig_comb,tmp[0:trig_comb.shape[0]])) 
-       tmp_inj_comb = np.hstack((tmp_inj_comb,tmp[trig_comb.shape[0]:])) 
-    comb_all = np.vstack((tmp_trig_comb, tmp_inj_comb)) 
+       normvals = ((vals - vals.mean()) / vals.max()).reshape((comb_all.shape[0], 1))
 
-    return tmp_trig_comb, tmp_inj_comb, comb_all    
+       if idx == 0:
+           tmp_bg_comb = normvals[0:n_bg]
+           tmp_inj_comb = normvals[n_bg:]
+       else:
+           tmp_bg_comb = np.hstack((tmp_bg_comb, normvals[0:n_bg])) 
+           tmp_inj_comb = np.hstack((tmp_inj_comb, normvals[n_bg:])) 
 
-def costco_label_maker(back_trig, inj_trig, tt_perc):
-    print 'bought a label maker for my nn, it\'s pretty nice'
-    #making labels (zero is noise, one is injection)
-    c_zero = np.zeros((back_trig.shape[0],1))
-    c_z_train = c_zero[:int(back_trig.shape[0]*tt_perc)]
-    c_z_test = c_zero[int(back_trig.shape[0]*tt_perc):int(back_trig.shape[0])]
-    c_ones = np.ones((int(inj_trig.shape[0]),1))
-    c_o_train = c_ones[:int(inj_trig.shape[0]*tt_perc)]
-    c_o_test = c_ones[int(inj_trig.shape[0]*tt_perc):int(inj_trig.shape[0])]
-    lab_train = np.vstack((c_z_train,c_o_train))
-    lab_test = np.vstack((c_z_test,c_o_test))
-    labels_all = np.vstack((c_zero,c_ones))
+    comb_all = np.vstack((tmp_bg_comb, tmp_inj_comb)) 
+    return tmp_bg_comb, tmp_inj_comb, comb_all
+
+def label_maker(back_trig, inj_trig, tt_perc):
+    # zero is noise, one is injection
+    n_bg, n_inj = back_trig.shape[0], inj_trig.shape[0]
+    c_zero = np.zeros((n_bg, 1))
+    c_z_train = c_zero[:int(n_bg * tt_perc)]
+    c_z_test = c_zero[int(n_bg * tt_perc):int(n_bg)]  # why int(n_bg)?
+    c_ones = np.ones((n_inj, 1))
+    c_o_train = c_ones[:int(n_inj * tt_perc)]
+    c_o_test = c_ones[int(n_inj * tt_perc):int(n_inj)] # why int()?
+    lab_train = np.vstack((c_z_train, c_o_train))
+    lab_test = np.vstack((c_z_test, c_o_test))
+    labels_all = np.vstack((c_zero, c_ones))
  
     return lab_train, lab_test, labels_all
 
-def samp_weight(trig_comb,inj_comb,inj_train_weight,inj_test_weight):
+def samp_weight(bg_comb, inj_comb, inj_w_train, inj_w_test, tt_perc):
     print 'making sample weights vector'
-    trig_weights = np.zeros((trig_comb.shape[0],1))
-    trig_weights.fill(1/((trig_comb.shape[0])/(inj_comb.shape[0])))
-    trig_w_train = trig_weights[:int(trig_comb.shape[0]*.7)]
-    trig_w_test = trig_weights[int(trig_comb.shape[0]*.7):]
-    train_weights = np.vstack((trig_w_train,inj_train_weight)).flatten()
-    test_weights = np.vstack((trig_w_test,inj_test_weight)).flatten()
+    bg_weights = np.zeros((bg_comb.shape[0], 1))
+    bg_weights.fill(30. * inj_comb.shape[0] / bg_comb.shape[0])
+    bg_w_train = bg_weights[:int(bg_comb.shape[0]*tt_perc)]
+    bg_w_test = bg_weights[int(bg_comb.shape[0]*tt_perc):]
+    train_weights = np.vstack((bg_w_train, inj_w_train)).flatten()
+    test_weights = np.vstack((bg_w_test, inj_w_test)).flatten()
 
     return train_weights, test_weights
 
-def the_machine(learning_rate, trig_comb, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now):
-    print 'It\'s is alive!!!'
+def the_machine(args, n_features, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now):
     model = Sequential()
-    drop_rate = 0.2
+    drop_rate = args.dropout_fraction
     ret_rate = 1 - drop_rate
-    act = keras.layers.advanced_activations.LeakyReLU(alpha=0.01)                       #LeakyReLU(alpha=0.1)
-    #early_stopping = EarlyStopping(monitor='val_loss', patience=2)
+    act = keras.layers.advanced_activations.LeakyReLU(alpha=0.1)
+    dro = GaussianDropout(drop_rate)
+    #early_stopping = EarlyStopping(monitor='val_loss', patience=2)  # not used?
 
-    #7 is the number of features used. This value may change in the future
-    model.add(Dense(int(8./ret_rate), input_dim=trig_comb.shape[1])) #10
-    model.add(BatchNormalization())
+    model.add(Dense(7, input_dim=n_features))
     act
-    model.add(GaussianDropout(drop_rate))
-
-    model.add(Dense(int(8./ret_rate))) #7
     model.add(BatchNormalization())
-    act
-    model.add(GaussianDropout(drop_rate))
+    model.add(GaussianDropout(0.1))
 
-    model.add(Dense(int(8./ret_rate))) #3
+    model.add(Dense(int(7./ret_rate)))
+    act
     model.add(BatchNormalization())
-    act
-    model.add(GaussianDropout(drop_rate))
+    model.add(dro)
 
-    model.add(Dense(int(8./ret_rate))) #3
+    model.add(Dense(int(7./ret_rate)))
+    act
     model.add(BatchNormalization())
-    act
-    model.add(GaussianDropout(drop_rate))
+    model.add(dro)
 
-    model.add(Dense(int(8./ret_rate))) #3
+    model.add(Dense(int(7./ret_rate)))
+    act
     model.add(BatchNormalization())
-    act
-    model.add(GaussianDropout(drop_rate))
+    model.add(dro)
 
-    model.add(Dense(int(8./ret_rate))) #3
+    model.add(Dense(int(7./ret_rate)))
+    act
     model.add(BatchNormalization())
-    act
-    model.add(GaussianDropout(drop_rate))
+    model.add(dro)
 
-    model.add(Dense(1, init='normal'))
-    model.add(Activation('sigmoid'))
+    model.add(Dense(1, init='normal', activation='sigmoid'))
 
     #Compiling model
     print("[INFO] compiling model...")
-    rmsprop = RMSprop(lr=learning_rate)  #default is 0.001
-    model.compile(loss="binary_crossentropy", optimizer=rmsprop,
-            metrics=["accuracy","binary_crossentropy"], class_mode='binary')
+    model.compile(loss="binary_crossentropy", optimizer=SGD(lr=args.learning_rate, momentum=0.8, decay=args.learning_rate/args.n_epoch, nesterov=True),
+            metrics=["accuracy","binary_crossentropy"]) #, class_mode='binary')
    
-    #model.fit(train_data, lab_train, nb_epoch=1, batch_size=32, sample_weight=train_weights, shuffle=True, show_accuracy=True)
     hist = model.fit(train_data, lab_train,
-                        nb_epoch=nb_epoch, batch_size=batch_size,    #66000
-                        sample_weight=train_weights,
-                        validation_data=(test_data,lab_test,test_weights),
-                        shuffle=True, show_accuracy=True)
+                     nb_epoch=args.n_epoch, batch_size=args.batch_size,
+                     sample_weight=train_weights,
+                     validation_data=(test_data,lab_test,test_weights),
+                     shuffle=True)
     #print(hist.history) 
 
     # show the accuracy on the testing set
     print("[INFO] evaluating on testing set...")
     eval_results = model.evaluate(test_data, lab_test,
-                                        sample_weight=test_weights,
-                                            batch_size=batch_size, verbose=1)
-    print("[INFO] loss={:.4f}, accuracy: {:.4f}%".format(eval_results[0],
-            eval_results[1] * 100))
+                                  sample_weight=test_weights,
+                                  batch_size=args.batch_size, verbose=1)
+    #print("[INFO] loss={:.4f}, accuracy: {:.4f}%".format(eval_results[0],
+    #        eval_results[1] * 100))
     #Saving prediction probabilities to a variable
     res_pre = model.predict(test_data)
 
@@ -277,7 +250,7 @@ def the_machine(learning_rate, trig_comb, nb_epoch, batch_size, train_weights, t
     return res_pre, eval_results, hist, model
 
 #Function to compute ROC curve for both newsnr and some other score value
-def ROC_inj_and_newsnr(run_num,batch_size,trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model):
+def ROC_inj_and_newsnr(batch_size,trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model):
     print 'generating ROC curve plot' 
 
     n_noise = len(trig_test)
@@ -293,7 +266,6 @@ def ROC_inj_and_newsnr(run_num,batch_size,trig_test,test_data,inj_test_weight,in
     class_sort = pred_class[pred_prob[:].argsort()][::-1]
     orig_test_labels = lab_test[pred_prob[:].argsort()][::-1]
 
-
     #Initialize variables/arrays
     w_sum = 0
     newsnr_sum = 0
@@ -308,23 +280,20 @@ def ROC_inj_and_newsnr(run_num,batch_size,trig_test,test_data,inj_test_weight,in
         #Compute sum
         w_sum = prob_sort_injWeight[prob_sort_inj >= prob_sort_noise[idx]].sum()
         newsnr_sum = newsnr_sort_injWeight[newsnr_sort_injNewsnr >= newsnr_sort_noiseNewsnr[idx]].sum()
-      
-        #Append
         ROC_w_sum.append(w_sum)
         ROC_newsnr_sum.append(newsnr_sum)
 
     #Normalize ROC y axis
     ROC_w_sum = np.asarray(ROC_w_sum)
-    ROC_w_sum *= (1.0/ROC_w_sum.max())
+    ROC_w_sum *= (1./ROC_w_sum.max())
     ROC_newsnr_sum = np.asarray(ROC_newsnr_sum)
-    ROC_newsnr_sum *= (1.0/ROC_newsnr_sum.max())
+    ROC_newsnr_sum *= (1./ROC_newsnr_sum.max())
         
     #Plot ROC Curve
-    pl.figure(run_num)
+    pl.figure()
     pl.plot(FAP,ROC_w_sum,label='NN Score')
     pl.plot(FAP,ROC_newsnr_sum,label='New SNR')
     pl.ylim(ymax=1.)
-     
     pl.legend(frameon=True, loc='lower right')
     #pl.title('ROC Curve')
     pl.xlabel('False alarm probability')
@@ -335,7 +304,7 @@ def ROC_inj_and_newsnr(run_num,batch_size,trig_test,test_data,inj_test_weight,in
 
     return ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob, prob_sort_noise, prob_sort_inj
 
-#Function to compute ROC cruve given any weight and score. Not currently used, but could be used later if desired
+#Function to compute ROC curve given any weight and score. Not currently used, but could be used later if desired
 def ROC(inj_weight, inj_param, noise_param, out_dir, now):
     print 'generating ROC curve plot'
     
@@ -358,7 +327,7 @@ def ROC(inj_weight, inj_param, noise_param, out_dir, now):
 
         #Normalize ROC y axis
         ROC_sum = np.asarray(ROC_sum)
-        ROC_sum *= (1.0/ROC_sum.max())
+        ROC_sum *= (1./ROC_sum.max())
 
     #Plot ROC Curve
     pl.plot(FAP,ROC_sum,label='Score')
@@ -370,12 +339,13 @@ def ROC(inj_weight, inj_param, noise_param, out_dir, now):
     pl.savefig('%s/run_%s/ROC_curve.png' % (out_dir,now))
     pl.close()
 
-
     return ROC_sum, FAP
+
 
 def feature_hists(run_num, out_dir, now, params, pre_proc_log, nn_train, nn_test, train_data, test_data):
     print 'plotting feature histograms'
     for idx, lab in enumerate(zip(params, pre_proc_log)):
+        print lab[0]
         for data, noise_len, dtype in zip([train_data, test_data], [nn_train, nn_test], ['train', 'test']):
             pl.figure(run_num+idx)
             hist_1, bins_1 = np.histogram(data[0:noise_len,idx], bins=100, density=True)
@@ -398,6 +368,7 @@ def feature_hists(run_num, out_dir, now, params, pre_proc_log, nn_train, nn_test
             pl.savefig('%s/run_%s/histograms/%s_%s.png' % (out_dir, now, lab[0], dtype))
             pl.close()
 
+
 def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data_p, params, back_test, hist, pred_prob, pre_proc_log):
 
     print 'plotting training metrics'
@@ -405,12 +376,15 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
     for i, metric in enumerate(['loss', 'acc', 'binary_crossentropy']):
         mname = metric.replace('acc', 'accuracy')
         pl.figure(run_num+i)
-        pl.plot(hist.history[metric], label='Training', alpha=0.4)
-        pl.plot(hist.history['val_'+metric], label='Validation', alpha=0.4)
+        pl.plot(hist.history[metric], label='Training')
+        pl.plot(hist.history['val_'+metric], label='Validation')
         pl.legend(frameon=True, loc='center right')
         pl.xlabel('Epoch')
         pl.ylabel(mname.replace('_', ' '))
-        pl.ylim(ymin=0.)
+        if metric == 'acc':
+            pl.ylim(ymin=0.7)
+        else:
+            pl.ylim(ymax=3. * hist.history[metric][-1])
         pl.savefig('%s/run_%s/%s_vs_epoch.png' % (out_dir, now, mname[0:4]))
         pl.close()
 
@@ -446,7 +420,7 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
         pl.ylim(0,1)
         pl.savefig('%s/run_%s/score_vs_%s.png' % (out_dir,now,lab[0]))
         pl.close()
-      
+
         for idx2,lab2 in enumerate(zip(params,pre_proc_log)):
              if lab[0] > lab2[0]:
                  print('plotting %s vs. %s' % (lab2[0], lab[0]))
@@ -476,19 +450,14 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
              else:
                  continue
 
-def alex_invest(inj_test_weights,inj_test,pred_prob):
-    newsnr_thresh = 10
-    score_thresh = 0.2
-    est_volume = inj_test_weights[inj_test[:,2] > newsnr_thresh and pred_prob < score_thresh]
-    print('This is the estimated volume of triggers with newsnr grater than %s and score less than %s: %s' % (newsnr_thresh,score_thresh,est_volume))
-    
+
 #Main function
 def main(): 
     #Configure tensorflow to use gpu memory as needed
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     session = tf.Session(config=config)
-    #don't Use seed value of 32 for testing purposes
+    #don't #Use seed value of 32 for testing purposes
     #np.random.seed(seed = 32)
 
     #Get Current time
@@ -496,31 +465,29 @@ def main():
 
     #construct the argument parse and parse the arguments
     ap = argparse.ArgumentParser()
-    ap.add_argument("-d", "--inj-files", required=True, nargs='+', type=str,
-            help="path to injection HDF files")
-    ap.add_argument("-b", "--bg-files", required=True, nargs='+', type=str,
-            help="path to background HDF files [currently, one inj file per chunk is used as source of bg data])")
-    ap.add_argument("-o", "--output-dir", required=True, type=str,
-            help="path to output directory")
-    ap.add_argument("-t", "--train-perc", required=False, default=0.5, type=float,
-            help="Fraction of triggers you want to train (between 0 and 1). Remaining triggers will be used for testing. Default 0.5")
-    ap.add_argument("-e", "--nb-epoch", required=False, default=100, type=int,
-            help="Number of epochs. Default 100")
-    ap.add_argument("-bs", "--batch-size", required=False, default=32, type=int,
-            help="Batch size for the training process (number of samples to use in each gradient descent step). Default 32")
-    ap.add_argument("-u", "--usertag", required=False, default=cur_time, type=str,
-            help="label for given run")
-    ap.add_argument("-r", "--run-number", required=False, default=0, type=int,
-            help="If performing multiple runs on same machine, specify a unique number for each run (must be greater than zero)")
+    ap.add_argument("-d", "--inj-files", nargs='+',
+        help="path to injection HDF files")
+    ap.add_argument("-b", "--bg-files", nargs='+',
+        help="path to background HDF files [currently, one inj file per chunk is used as source of bg data]")
+    ap.add_argument("-o", "--output-dir", required=True,
+        help="path to output directory")
+    ap.add_argument("-t", "--train-perc", type=float, required=False, default=0.5,
+        help="Fraction of triggers you want to train (between 0 and 1). Remaining triggers will be used for testing. Default 0.5")
+    ap.add_argument("-e", "--n-epoch", type=int, required=False, default=100,
+        help="Number of epochs. Default 100")
+    ap.add_argument("-bs", "--batch-size", type=int, required=False, default=32,
+        help="Batch size for the training process (number of samples to use in each gradient descent step). Default 32")
     ap.add_argument("--learning-rate", type=float, default=0.01,
         help="Learning rate. Default 0.01")
     ap.add_argument("--dropout-fraction", type=float, default=0.,
         help="Amount of Gaussian dropout noise to use in training. Default 0 (no noise)")
+    ap.add_argument("-u", "--usertag", required=False, default=cur_time,
+        help="label for given run")
+    ap.add_argument("-r", "--run-number", type=int, required=False, default=0,
+        help="If performing multiple runs on same machine, specify a unique number for each run (must be greater than zero)")
     args = ap.parse_args()
 
     #Initializing parameters
-    data_files = args.inj_files
-    back_files = args.bg_files
     out_dir = args.output_dir
     #now = datetime.datetime.now()       #Get current time for time stamp labels
     now = args.usertag
@@ -528,51 +495,51 @@ def main():
     os.makedirs('%s/run_%s/colored_plots' % (out_dir,now))
     os.makedirs('%s/run_%s/histograms' % (out_dir,now))
 
-    back_params = ['marg_l','count_in','maxnewsnr','maxsnr','ratio_chirp','delT','template_duration','count_out','delta_chirp','time']
-    inj_params = ['marg_l_inj','count_in_inj','maxnewsnr_inj','maxsnr_inj','ratio_chirp_inj','delT_inj','template_duration_inj','count_out_inj','dist_inj','delta_chirp_inj','time_inj']
-    pre_proc_log = [True,True,True,True,True,False,True,False] #True means to take log of feature, False means don't take log of feature during pre-processing
-    tt_split = args.train_perc
-    nb_epoch = args.nb_epoch
+    back_params = ['count_in', 'count_out', 'maxnewsnr', 'maxsnr', 'ratio_chirp', 'delT', 'template_duration']
+    inj_params = ['count_in_inj', 'count_out_inj', 'maxnewsnr_inj', 'maxsnr_inj', 'ratio_chirp_inj', 'delT_inj', 'template_duration_inj', 'dist_inj']
+    pre_proc_log = [True,True,True,True,True,False,True] #True means to take log of feature, False means don't take log of feature during pre-processing
     batch_size = args.batch_size
     run_num = args.run_number
 
     #Downloading background and injection triggers
-    back_trig, dict_comb = load_back_data(back_files, back_params)
-    inj_trig, dict_comb = load_inj_data(data_files, inj_params, dict_comb)
+    bg_trig, dict_comb = load_back_data(args.bg_files, back_params)
+    inj_trig, dict_comb = load_inj_data(args.inj_files, inj_params, dict_comb)
 
     #Getting injection weights for later use in neural network training process
     inj_weights = inj_weight_calc(dict_comb)
 
     #Storing original trigger feature values prior to normalization
-    train_data_p, test_data_p, comb_all = orig_norm(back_trig, inj_trig, tt_split)    
+    train_data_p, test_data_p, comb_all = orig_norm(bg_trig, inj_trig, args.train_perc)
 
-    #Normalizing features from zero to one
-    back_trig, inj_trig, comb_all = normalize(back_trig, comb_all, pre_proc_log)
+    #Normalizing feature means and ranges (and logging some of them)
+    bg_trig, inj_trig, comb_all = normalize(comb_all, pre_proc_log, bg_trig.shape[0])
+    print bg_trig.shape
 
     #Randomizing the order of the background triggers
-    indices_trig = np.random.permutation(back_trig.shape[0])
+    indices_bg = np.random.permutation(bg_trig.shape[0])
 
-    #Seperating into training/testing sets
-    train_data, test_data, back_test, inj_test, inj_test_weight, inj_train_weight = sep(back_trig, inj_trig, indices_trig, tt_split, inj_weights)
+    #Separating into training/testing sets
+    train_data, test_data, back_test, inj_test, inj_w_test, inj_w_train = \
+      sep(bg_trig, inj_trig, indices_bg, args.train_perc, inj_weights)
+    print train_data.shape
 
-    #making labels (zero is noise, one is injection)...better label maker than one you could buy at costco in my opinion
-    lab_train, lab_test, labels_all = costco_label_maker(back_trig, inj_trig, tt_split)
-    print len(lab_train), len(lab_test), len(labels_all)
+    #making labels (zero is noise, one is injection)
+    lab_train, lab_test, labels_all = label_maker(bg_trig, inj_trig, args.train_perc)
 
     #Creating sample weights vector
-    train_weights, test_weights = samp_weight(back_trig, inj_trig, inj_train_weight, inj_test_weight)
+    train_weights, test_weights = samp_weight(bg_trig, inj_trig, inj_w_train, inj_w_test, args.train_perc)
 
     #Plot histograms of features
-    feature_hists(run_num, out_dir, now, back_params[:len(back_params)-2], pre_proc_log, sum(lab_train.flatten() == 0), len(back_test), train_data, test_data)
+    feature_hists(run_num, out_dir, now, back_params, pre_proc_log, sum(lab_train.flatten() == 0), len(back_test), train_data, test_data)
 
-    #training/testing on deep neural network
-    res_pre, eval_results, hist, model = the_machine(args.learning_rate, back_trig, nb_epoch, batch_size, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
-    
+    #training/testing on neural network
+    res_pre, eval_results, hist, model = the_machine(args, bg_trig.shape[1], train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
+
     #Compute the ROC curve
-    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob, prob_sort_noise, prob_sort_inj = ROC_inj_and_newsnr(run_num,batch_size,back_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model)
+    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob, prob_sort_noise, prob_sort_inj = ROC_inj_and_newsnr(batch_size, back_test, test_data, inj_w_test, inj_test, lab_test, out_dir, now, model)
 
     #Score/histogram plots
-    main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data, back_params[:len(back_params)-2], back_test, hist, pred_prob, pre_proc_log)
+    main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data, back_params, back_test, hist, pred_prob, pre_proc_log)
 
     #Write data to an hdf file
     with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
@@ -584,7 +551,6 @@ def main():
         hf.create_dataset('ROC_newsnr_sum', data=ROC_newsnr_sum)
         hf.create_dataset('inj_weights', data=inj_weights)
 
-
-    print 'and...presto! You\'re done!'
+    print 'Done!'
 if __name__ == '__main__':
     main()
