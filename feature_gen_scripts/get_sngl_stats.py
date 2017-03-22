@@ -21,6 +21,7 @@ import pycbc
 from pycbc import events
 import sympy
 from pycbc.types import MultiDetOptionAction
+import sys
 #import matplotlib.pyplot as plt
 
 
@@ -72,9 +73,16 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
 	time_injc = f_injc['time'+ifonum][:]
 	ifar_injc = f_injc['ifar'][:]
         dist_injc = hf_injcoinc['injections/distance'][:]
-         
+
+        #Add in optimal snr feature for use as a new weight prior to training neural network
+        if ifo == 'L1':
+            opt_snr = hf_injcoinc['injections/optimal_snr_1'][:]
+        elif ifo == 'H1':
+            opt_snr = hf_injcoinc['injections/optimal_snr_2'][:]
+  
         time_injc = time_injc[ifar_injc > float(args.ifar_thresh)]
         injection_index_injc = hf_injcoinc['found_after_vetoes/injection_index'][ifar_injc > float(args.ifar_thresh)]
+        opt_snr_final = 1./(opt_snr[injection_index_injc]**2)
         dist_injc = dist_injc[injection_index_injc] 
         
 	del ifar_injc
@@ -313,6 +321,7 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
         o['%s/maxsnr_inj' % ifo] = numpy.array(maxsnr_inj)
         o['%s/maxnewsnr_inj' % ifo] = numpy.array(maxnewsnr_inj)
         o['%s/template_duration_inj' % ifo] = numpy.array(tmp_dur_inj)
+        o['%s/opt_snr' % ifo] = numpy.array(opt_snr_final)
 
         if args.just_inj == 'False':
             o['%s/delT' % ifo] = numpy.array(delT)
@@ -328,7 +337,7 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
             o['%s/template_duration' % ifo] = numpy.array(tmp_dur)
  
 print "Forget the coincs, I'm outta here"
-exit()
+sys.exit()
 
 # COINCS ######################################################################
 # Assumes that *all* the coincs above some threshold are available.

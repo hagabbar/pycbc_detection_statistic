@@ -13,7 +13,7 @@ import h5py
 from keras.layers import Dense, Activation, Dropout, GaussianDropout, ActivityRegularization
 from keras.optimizers import SGD, RMSprop
 from keras.layers.normalization import BatchNormalization
-import os
+import os, sys
 from math import exp, log
 import tensorflow as tf
 from keras.callbacks import EarlyStopping
@@ -56,7 +56,7 @@ def load_back_data(data, params):
     return back_comb, dict_comb
 
 #Load injection triggers from multiple data sets
-def load_inj_data(data, params, dict_comb):
+def load_inj_data(data, params, dict_comb, weight):
     tmp_comb = {}
     inj = {}
     print 'loading injections'
@@ -67,42 +67,70 @@ def load_inj_data(data, params, dict_comb):
         if i == 0:
             for key in params:
                 # treat inj distance differently
-                if key == 'dist_inj':
+                if key == 'dist_inj' or key == 'opt_snr':
                     dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
                 else:
                     dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
                     inj[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
         else:
             for key in params:
-                if key == 'dist_inj':  # distance goes into dict_comb but not into inj_comb
+                if key == 'dist_inj' or key == 'opt_snr':  # distance goes into dict_comb but not into inj_comb
                     tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
                     dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
                 else:
                     tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
                     inj[key] = np.vstack((inj[key], tmp_comb[key+'_new']))
                     dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
-
+    
+    #Create opt_snr mask so as to remove those injections with optimal snr of zero
+    mask = np.invert(np.isinf(dict_comb['opt_snr']))
+    
     for idx, key in enumerate(params):
         print key
-        if key == 'dist_inj':
+        if key == 'dist_inj' or key == 'opt_snr':
             continue
-        elif idx == 0:
+        elif idx == 0 and weight == 'optimal_snr':
+            inj_comb = inj[key][mask].reshape((dict_comb['maxsnr_inj'][mask].shape[0],1))  
+        elif idx == 0 and weight == 'distance':
             inj_comb = inj[key]
-        else:
+        elif idx > 0 and weight == 'optimal_snr':
+            inj_comb = np.hstack((inj_comb, inj[key][mask].reshape((dict_comb['maxsnr_inj'][mask].shape[0],1)))) 
+        elif idx > 0 and weight == 'distance':
             inj_comb = np.hstack((inj_comb, inj[key]))
     return inj_comb, dict_comb
 
-#Generate injection weights
-def inj_weight_calc(dict_comb):
-    print 'calculating injection weights'
-    inj_weights_pre = []
-    dist_inj = dict_comb['dist_inj']
-    w_mean = (dist_inj**2).mean()
-    #print dict_comb['maxsnr_inj']
-    for idx, val in enumerate(dict_comb['maxsnr_inj']):
-        inj_weights_pre.append((dist_inj[idx][0] ** 2) / w_mean)
+#Generate source distance injection weights
+#def inj_weight_calc(dict_comb):
+#    print 'calculating injection weights'
+#    inj_weights_pre = []
+#    dist_inj = dict_comb['dist_inj']
+#    w_mean = (dist_inj**2).mean()
+#    for idx, val in enumerate(dict_comb['maxsnr_inj']):
+#        inj_weights_pre.append((dist_inj[idx][0] ** 2) / w_mean)
 
-    return np.asarray(inj_weights_pre).reshape((dict_comb['maxsnr_inj'].shape[0],1))
+#    return np.asarray(inj_weights_pre).reshape((dict_comb['maxsnr_inj'].shape[0],1))
+
+#Generate optimal snr injection weights
+def inj_weight_calc(dict_comb, weight):
+    print 'calculating injection weights'
+    
+    if weight == 'optimal_snr':
+        #Create opt_snr mask so as to remove those injections with optimal snr of zero
+        mask = np.invert(np.isinf(dict_comb['opt_snr']))
+
+        inj_weights_pre = []
+        opt_snr = dict_comb['opt_snr']
+        inj_weights_pre = np.asarray(opt_snr[mask]).reshape((dict_comb['maxsnr_inj'][mask].shape[0],1))
+        
+    elif weight == 'distance':
+        inj_weights_pre = []
+        dist_inj = dict_comb['dist_inj']
+        w_mean = (dist_inj**2).mean()
+        for idx, val in enumerate(dict_comb['maxsnr_inj']):
+            inj_weights_pre.append((dist_inj[idx][0] ** 2) / w_mean)   
+        inj_weights_pre = np.asarray(inj_weights_pre).reshape((dict_comb['maxsnr_inj'].shape[0],1))  
+        
+    return inj_weights_pre
 
 def orig_norm(bg_trig, inj_trig, tt_split):
     print 'storing original trigger values prior to normalization'
@@ -215,6 +243,23 @@ def the_machine(args, n_features, train_weights, test_weights, train_data, test_
     act
     model.add(BatchNormalization())
     model.add(dro)
+
+    #Additional hidden lay testing
+    model.add(Dense(int(7./ret_rate)))
+    act
+    model.add(BatchNormalization())
+    model.add(dro)
+
+    model.add(Dense(int(7./ret_rate)))
+    act
+    model.add(BatchNormalization())
+    model.add(dro)
+
+    model.add(Dense(int(7./ret_rate)))
+    act
+    model.add(BatchNormalization())
+    model.add(dro)
+
 
     model.add(Dense(1, init='normal', activation='sigmoid'))
 
@@ -485,6 +530,8 @@ def main():
         help="label for given run")
     ap.add_argument("-r", "--run-number", type=int, required=False, default=0,
         help="If performing multiple runs on same machine, specify a unique number for each run (must be greater than zero)")
+    ap.add_argument("-w", "--weight", required=True, type=str,
+        help="Choose a sample weighting scheme (e.g. optimal_snr or distance")
     args = ap.parse_args()
 
     #Initializing parameters
@@ -496,17 +543,18 @@ def main():
     os.makedirs('%s/run_%s/histograms' % (out_dir,now))
 
     back_params = ['count_in', 'count_out', 'maxnewsnr', 'maxsnr', 'ratio_chirp', 'delT', 'template_duration']
-    inj_params = ['count_in_inj', 'count_out_inj', 'maxnewsnr_inj', 'maxsnr_inj', 'ratio_chirp_inj', 'delT_inj', 'template_duration_inj', 'dist_inj']
+    inj_params = ['count_in_inj', 'count_out_inj', 'maxnewsnr_inj', 'maxsnr_inj', 'ratio_chirp_inj', 'delT_inj', 'template_duration_inj', 'dist_inj', 'opt_snr']
     pre_proc_log = [True,True,True,True,True,False,True] #True means to take log of feature, False means don't take log of feature during pre-processing
     batch_size = args.batch_size
     run_num = args.run_number
+    weight = args.weight
 
     #Downloading background and injection triggers
     bg_trig, dict_comb = load_back_data(args.bg_files, back_params)
-    inj_trig, dict_comb = load_inj_data(args.inj_files, inj_params, dict_comb)
+    inj_trig, dict_comb = load_inj_data(args.inj_files, inj_params, dict_comb, weight)
 
     #Getting injection weights for later use in neural network training process
-    inj_weights = inj_weight_calc(dict_comb)
+    inj_weights = inj_weight_calc(dict_comb, weight)
 
     #Storing original trigger feature values prior to normalization
     train_data_p, test_data_p, comb_all = orig_norm(bg_trig, inj_trig, args.train_perc)
