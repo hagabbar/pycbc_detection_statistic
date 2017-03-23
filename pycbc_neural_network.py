@@ -120,7 +120,10 @@ def inj_weight_calc(dict_comb, weight):
 
         inj_weights_pre = []
         opt_snr = dict_comb['opt_snr']
-        inj_weights_pre = np.asarray(opt_snr[mask]).reshape((dict_comb['maxsnr_inj'][mask].shape[0],1))
+        w_mean = opt_snr[mask].mean()
+        for idx, val in enumerate(dict_comb['maxsnr_inj'][mask]):
+             inj_weights_pre.append(opt_snr[mask][idx] / w_mean)
+        inj_weights_pre = np.asarray(inj_weights_pre).reshape((dict_comb['maxsnr_inj'][mask].shape[0],1))
         
     elif weight == 'distance':
         inj_weights_pre = []
