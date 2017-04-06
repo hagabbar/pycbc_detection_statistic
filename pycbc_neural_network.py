@@ -4,6 +4,7 @@
 #How to use only one GPU device....export CUDA_VISIBLE_DEVICES="0" in command line prior to run
 #How to run in the background from the command line...python simple_neural_network.py -d NSBH01_ifar0-1.hdf,NSBH02_ifar0-1.hdf >/dev/null 2>err.txt &
 
+
 from __future__ import division
 import argparse
 import keras
@@ -13,7 +14,7 @@ import h5py
 from keras.layers import Dense, Activation, Dropout, GaussianDropout, ActivityRegularization
 from keras.optimizers import SGD, RMSprop
 from keras.layers.normalization import BatchNormalization
-import os, sys
+import os, sys, shutil
 from math import exp, log
 import tensorflow as tf
 from keras.callbacks import EarlyStopping
@@ -37,23 +38,35 @@ def load_back_data(data, params):
         # set up original array
         if i == 0:
             for key in params:
-                dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
-                back[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                if key == 'time':
+                    dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                else:
+                    dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                    back[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
         else:
             # stack on additional data
             for key in params:
-                tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
-                back[key] = np.vstack((back[key], tmp_comb[key+'_new']))
-                dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
+                if key == 'time':
+                    tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                    dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
+                else:
+                    tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                    back[key] = np.vstack((back[key], tmp_comb[key+'_new']))
+                    dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
+
+    #Saving background trigger gps time
+    back_time = dict_comb['time'].reshape((dict_comb['maxsnr'].shape[0],1))
 
     for idx, key in enumerate(params):
         print key
-        if idx == 0:
+        if key == 'time':
+            continue
+        elif idx == 0:
             back_comb = back[key]
         else:
             back_comb = np.hstack((back_comb, back[key]))
 
-    return back_comb, dict_comb
+    return back_comb, dict_comb, back_time
 
 #Load injection triggers from multiple data sets
 def load_inj_data(data, params, dict_comb, weight):
@@ -67,14 +80,14 @@ def load_inj_data(data, params, dict_comb, weight):
         if i == 0:
             for key in params:
                 # treat inj distance differently
-                if key == 'dist_inj' or key == 'opt_snr':
+                if key == 'dist_inj' or key == 'opt_snr' or key == 'time_inj':
                     dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
                 else:
                     dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
                     inj[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
         else:
             for key in params:
-                if key == 'dist_inj' or key == 'opt_snr':  # distance goes into dict_comb but not into inj_comb
+                if key == 'dist_inj' or key == 'opt_snr' or key == 'time_inj':  # distance goes into dict_comb but not into inj_comb
                     tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
                     dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
                 else:
@@ -85,9 +98,15 @@ def load_inj_data(data, params, dict_comb, weight):
     #Create opt_snr mask so as to remove those injections with optimal snr of zero
     mask = np.invert(np.isinf(dict_comb['opt_snr']))
     
+    #Saving injection gps time
+    if weight == 'optimal_snr':
+        inj_time = dict_comb['time_inj'][mask].reshape((dict_comb['maxsnr_inj'][mask].shape[0],1))
+    elif weight == 'distance':
+        inj_time = dict_comb['time_inj'].reshape((dict_comb['maxsnr_inj'].shape[0],1))
+
     for idx, key in enumerate(params):
         print key
-        if key == 'dist_inj' or key == 'opt_snr':
+        if key == 'dist_inj' or key == 'opt_snr' or key == 'time_inj':
             continue
         elif idx == 0 and weight == 'optimal_snr':
             inj_comb = inj[key][mask].reshape((dict_comb['maxsnr_inj'][mask].shape[0],1))  
@@ -97,7 +116,7 @@ def load_inj_data(data, params, dict_comb, weight):
             inj_comb = np.hstack((inj_comb, inj[key][mask].reshape((dict_comb['maxsnr_inj'][mask].shape[0],1)))) 
         elif idx > 0 and weight == 'distance':
             inj_comb = np.hstack((inj_comb, inj[key]))
-    return inj_comb, dict_comb
+    return inj_comb, dict_comb, inj_time
 
 #Generate source distance injection weights
 #def inj_weight_calc(dict_comb):
@@ -150,7 +169,7 @@ def orig_norm(bg_trig, inj_trig, tt_split):
 
     return train_data_p, test_data_p, comb_all
 
-def sep(bg_comb, inj_comb, indices_bg, tt_split, inj_weights):
+def sep(bg_comb, inj_comb, indices_bg, tt_split, inj_weights, comb_all, back_time, inj_time):
     print 'separating into training/testing sets'
     n_bg, n_inj = bg_comb.shape[0], inj_comb.shape[0]
     bg_train_idx, bg_test_idx = indices_bg[:int(n_bg * tt_split)], indices_bg[int(n_bg * tt_split):int(n_bg)]  # WHY LAST INDEX NEEDED?
@@ -162,7 +181,15 @@ def sep(bg_comb, inj_comb, indices_bg, tt_split, inj_weights):
     train_data = np.vstack((bg_train, inj_train))
     test_data = np.vstack((bg_test, inj_test))
 
-    return train_data, test_data, bg_test, inj_test, inj_test_weight, inj_train_weight
+    #Seperating gps times into testing and training sets
+    bg_train_times, bg_test_times = back_time[bg_train_idx,:], back_time[bg_test_idx,:]
+    inj_train_times, inj_test_times = inj_time[inj_train_idx,:], inj_time[inj_test_idx,:]
+    train_times = np.vstack((bg_train_times, inj_train_times))
+    test_times = np.vstack((bg_test_times, inj_test_times))
+
+    print comb_all
+
+    return train_data, test_data, bg_test, inj_test, inj_test_weight, inj_train_weight, train_times, test_times
 
 def normalize(comb_all, pre_proc_log, n_bg):
     print 'normalizing (and logging some) features'
@@ -222,7 +249,7 @@ def the_machine(args, n_features, train_weights, test_weights, train_data, test_
     dro = GaussianDropout(drop_rate)
     #early_stopping = EarlyStopping(monitor='val_loss', patience=2)  # not used?
 
-    model.add(Dense(7, input_dim=n_features))
+    model.add(Dense(7, input_dim=n_features)) #Add in Dense 7
     act
     model.add(BatchNormalization())
     model.add(GaussianDropout(0.1))
@@ -248,20 +275,20 @@ def the_machine(args, n_features, train_weights, test_weights, train_data, test_
     model.add(dro)
 
     #Additional hidden lay testing
-    model.add(Dense(int(7./ret_rate)))
-    act
-    model.add(BatchNormalization())
-    model.add(dro)
+    #model.add(Dense(int(7./ret_rate)))
+    #act
+    #model.add(BatchNormalization())
+    #model.add(dro)
 
-    model.add(Dense(int(7./ret_rate)))
-    act
-    model.add(BatchNormalization())
-    model.add(dro)
+    #model.add(Dense(int(7./ret_rate)))
+    #act
+    #model.add(BatchNormalization())
+    #model.add(dro)
 
-    model.add(Dense(int(7./ret_rate)))
-    act
-    model.add(BatchNormalization())
-    model.add(dro)
+    #model.add(Dense(int(7./ret_rate)))
+    #act
+    #model.add(BatchNormalization())
+    #model.add(dro)
 
 
     model.add(Dense(1, init='normal', activation='sigmoid'))
@@ -298,7 +325,7 @@ def the_machine(args, n_features, train_weights, test_weights, train_data, test_
     return res_pre, eval_results, hist, model
 
 #Function to compute ROC curve for both newsnr and some other score value
-def ROC_inj_and_newsnr(batch_size,trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model):
+def ROC_inj_and_newsnr(batch_size,trig_test,test_data,inj_test_weight,inj_test,lab_test,out_dir,now,model,train_times,test_times,test_data_p):
     print 'generating ROC curve plot' 
 
     n_noise = len(trig_test)
@@ -313,6 +340,24 @@ def ROC_inj_and_newsnr(batch_size,trig_test,test_data,inj_test_weight,inj_test,l
     pred_class = model.predict_classes(test_data, batch_size=batch_size)
     class_sort = pred_class[pred_prob[:].argsort()][::-1]
     orig_test_labels = lab_test[pred_prob[:].argsort()][::-1]
+
+    #Sorting gps triggers/injections
+    #First indice is loudest, last indice is quitest.  
+    bg_time_sorted = test_times[0:n_noise][pred_prob[0:n_noise].argsort()][::-1]
+    inj_time_sorted = test_times[n_noise:][pred_prob[n_noise:].argsort()][::-1]
+
+    bg_sorted = test_data_p[0:n_noise,:][pred_prob[0:n_noise].argsort()][::-1]
+    inj_sorted = test_data_p[n_noise:,:][pred_prob[n_noise:].argsort()][::-1]
+
+    fmt = '{:<8}{:<20}{}'
+    nameList= ['count_in', 'count_out', 'maxnewsnr', 'maxsnr', 'ratio_chirp', 'delT', 'template_duration']
+
+    print '\nFive highest ranked background events by neural network ...'
+    print(fmt.format('', 'GPS Time', '  -- count_in -- count_out -- maxnewsnr -- maxsnr -- ratio_chirp delT -- template_duration'))
+
+    for i, (gpstime, features) in enumerate(zip(bg_time_sorted[0:5], bg_sorted[0:5,:])):
+        print(fmt.format(i, gpstime, features))    
+
 
     #Initialize variables/arrays
     w_sum = 0
@@ -417,7 +462,7 @@ def feature_hists(run_num, out_dir, now, params, pre_proc_log, nn_train, nn_test
             pl.close()
 
 
-def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data_p, params, back_test, hist, pred_prob, pre_proc_log):
+def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data_p, params, back_test, hist, pred_prob, pre_proc_log, train_times, test_times):
 
     print 'plotting training metrics'
     print hist.history.keys()
@@ -500,7 +545,11 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
 
 
 #Main function
-def main(): 
+def main():
+    #For TESTING ONLY
+    shutil.rmtree('/home/hunter.gabbard/public_html/simple_neural_net/testing/classification/L1-all_of_O1_run/top_5_trigs/run_test2')
+
+ 
     #Configure tensorflow to use gpu memory as needed
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -545,16 +594,16 @@ def main():
     os.makedirs('%s/run_%s/colored_plots' % (out_dir,now))
     os.makedirs('%s/run_%s/histograms' % (out_dir,now))
 
-    back_params = ['count_in', 'count_out', 'maxnewsnr', 'maxsnr', 'ratio_chirp', 'delT', 'template_duration']
-    inj_params = ['count_in_inj', 'count_out_inj', 'maxnewsnr_inj', 'maxsnr_inj', 'ratio_chirp_inj', 'delT_inj', 'template_duration_inj', 'dist_inj', 'opt_snr']
+    back_params = ['count_in', 'count_out', 'maxnewsnr', 'maxsnr', 'ratio_chirp', 'delT', 'template_duration', 'time']
+    inj_params = ['count_in_inj', 'count_out_inj', 'maxnewsnr_inj', 'maxsnr_inj', 'ratio_chirp_inj', 'delT_inj', 'template_duration_inj', 'dist_inj', 'opt_snr', 'time_inj']
     pre_proc_log = [True,True,True,True,True,False,True] #True means to take log of feature, False means don't take log of feature during pre-processing
     batch_size = args.batch_size
     run_num = args.run_number
     weight = args.weight
 
     #Downloading background and injection triggers
-    bg_trig, dict_comb = load_back_data(args.bg_files, back_params)
-    inj_trig, dict_comb = load_inj_data(args.inj_files, inj_params, dict_comb, weight)
+    bg_trig, dict_comb, back_time = load_back_data(args.bg_files, back_params)
+    inj_trig, dict_comb, inj_time = load_inj_data(args.inj_files, inj_params, dict_comb, weight)
 
     #Getting injection weights for later use in neural network training process
     inj_weights = inj_weight_calc(dict_comb, weight)
@@ -570,8 +619,8 @@ def main():
     indices_bg = np.random.permutation(bg_trig.shape[0])
 
     #Separating into training/testing sets
-    train_data, test_data, back_test, inj_test, inj_w_test, inj_w_train = \
-      sep(bg_trig, inj_trig, indices_bg, args.train_perc, inj_weights)
+    train_data, test_data, back_test, inj_test, inj_w_test, inj_w_train, train_times, test_times = \
+      sep(bg_trig, inj_trig, indices_bg, args.train_perc, inj_weights, comb_all, back_time, inj_time)
     print train_data.shape
 
     #making labels (zero is noise, one is injection)
@@ -587,10 +636,10 @@ def main():
     res_pre, eval_results, hist, model = the_machine(args, bg_trig.shape[1], train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now)
 
     #Compute the ROC curve
-    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob, prob_sort_noise, prob_sort_inj = ROC_inj_and_newsnr(batch_size, back_test, test_data, inj_w_test, inj_test, lab_test, out_dir, now, model)
+    ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob, prob_sort_noise, prob_sort_inj = ROC_inj_and_newsnr(batch_size, back_test, test_data, inj_w_test, inj_test, lab_test, out_dir, now, model, train_times, test_times, test_data_p)
 
     #Score/histogram plots
-    main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data, back_params, back_test, hist, pred_prob, pre_proc_log)
+    main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data, back_params, back_test, hist, pred_prob, pre_proc_log, train_times, test_times)
 
     #Write data to an hdf file
     with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
