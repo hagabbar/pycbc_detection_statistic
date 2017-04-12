@@ -154,14 +154,14 @@ def inj_weight_calc(dict_comb, weight):
         
     return inj_weights_pre
 
-def orig_norm(bg_trig, inj_trig, tt_split):
+def orig_norm(bg_trig, inj_trig, tt_split, perm):
     print 'storing original trigger values prior to normalization'
     n_bg, n_inj = bg_trig.shape[0], inj_trig.shape[0]
     comb_all = np.vstack((bg_trig, inj_trig))
-    indices_bg = np.random.permutation(n_bg)
+    indices_bg = perm[0]
     bg_train_idx, bg_test_idx = indices_bg[:int(n_bg * tt_split)], indices_bg[int(n_bg * tt_split):int(n_bg)] # WHY LAST INDEX NEEDED?
     bg_train_p, bg_test_p = bg_trig[bg_train_idx,:], bg_trig[bg_test_idx,:]
-    indices_inj = np.random.permutation(n_inj)
+    indices_inj = perm[1]
     inj_train_idx, inj_test_idx = indices_inj[:int(n_inj * tt_split)], indices_inj[int(n_inj * tt_split):]
     inj_train_p, inj_test_p = inj_trig[inj_train_idx,:], inj_trig[inj_test_idx,:]
     train_data_p = np.vstack((bg_train_p, inj_train_p))
@@ -169,12 +169,12 @@ def orig_norm(bg_trig, inj_trig, tt_split):
 
     return train_data_p, test_data_p, comb_all
 
-def sep(bg_comb, inj_comb, indices_bg, tt_split, inj_weights, comb_all, back_time, inj_time):
+def sep(bg_comb, inj_comb, indices_bg, tt_split, inj_weights, comb_all, back_time, inj_time, perm):
     print 'separating into training/testing sets'
     n_bg, n_inj = bg_comb.shape[0], inj_comb.shape[0]
-    bg_train_idx, bg_test_idx = indices_bg[:int(n_bg * tt_split)], indices_bg[int(n_bg * tt_split):int(n_bg)]  # WHY LAST INDEX NEEDED?
+    bg_train_idx, bg_test_idx = perm[0][:int(n_bg * tt_split)], perm[0][int(n_bg * tt_split):int(n_bg)]  # WHY LAST INDEX NEEDED?
     bg_train, bg_test = bg_comb[bg_train_idx,:], bg_comb[bg_test_idx,:]
-    indices_inj = np.random.permutation(n_inj)
+    indices_inj = perm[1]
     inj_train_idx, inj_test_idx = indices_inj[:int(n_inj * tt_split)], indices_inj[int(n_inj * tt_split):]
     inj_train_weight, inj_test_weight = inj_weights[inj_train_idx,:], inj_weights[inj_test_idx,:]
     inj_train, inj_test = inj_comb[inj_train_idx,:], inj_comb[inj_test_idx,:]
@@ -355,9 +355,14 @@ def ROC_inj_and_newsnr(batch_size,trig_test,test_data,inj_test_weight,inj_test,l
     print '\nFive highest ranked background events by neural network ...'
     print(fmt.format('', 'GPS Time', '  -- count_in -- count_out -- maxnewsnr -- maxsnr -- ratio_chirp delT -- template_duration'))
 
+    #Storing Five highest ranked background events by neural network into txt file
+    f = open('%s/run_%s/highest_ranked_trigs.txt' % (out_dir,now), 'a')
+    print >>f, '\nFive highest ranked background events by neural network ...'
+    print >>f, fmt.format('', 'GPS Time', '  -- count_in -- count_out -- maxnewsnr -- maxsnr -- ratio_chirp delT -- template_duration')
+
     for i, (gpstime, features) in enumerate(zip(bg_time_sorted[0:5], bg_sorted[0:5,:])):
         print(fmt.format(i, gpstime, features))    
-
+        print >>f, fmt.format(i,gpstime, features)
 
     #Initialize variables/arrays
     w_sum = 0
@@ -547,7 +552,7 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
 #Main function
 def main():
     #For TESTING ONLY
-    shutil.rmtree('/home/hunter.gabbard/public_html/simple_neural_net/testing/classification/L1-all_of_O1_run/top_5_trigs/run_test2')
+    shutil.rmtree('/home/hunter.gabbard/public_html/simple_neural_net/testing/classification/L1-all_of_O1_run/top_5_trigs/run_test3')
 
  
     #Configure tensorflow to use gpu memory as needed
@@ -608,19 +613,23 @@ def main():
     #Getting injection weights for later use in neural network training process
     inj_weights = inj_weight_calc(dict_comb, weight)
 
+    #Set random shuffles of bg and inj features once and for all
+    indices_bg = np.random.permutation(bg_trig.shape[0])
+    indices_inj = np.random.permutation(inj_trig.shape[0])
+    perm = (indices_bg, indices_inj)
+
     #Storing original trigger feature values prior to normalization
-    train_data_p, test_data_p, comb_all = orig_norm(bg_trig, inj_trig, args.train_perc)
+    train_data_p, test_data_p, comb_all = orig_norm(bg_trig, inj_trig, args.train_perc, perm)
 
     #Normalizing feature means and ranges (and logging some of them)
     bg_trig, inj_trig, comb_all = normalize(comb_all, pre_proc_log, bg_trig.shape[0])
     print bg_trig.shape
 
-    #Randomizing the order of the background triggers
-    indices_bg = np.random.permutation(bg_trig.shape[0])
+#Need bg indices for next function. Work that in...
 
     #Separating into training/testing sets
     train_data, test_data, back_test, inj_test, inj_w_test, inj_w_train, train_times, test_times = \
-      sep(bg_trig, inj_trig, indices_bg, args.train_perc, inj_weights, comb_all, back_time, inj_time)
+      sep(bg_trig, inj_trig, indices_bg, args.train_perc, inj_weights, comb_all, back_time, inj_time, perm)
     print train_data.shape
 
     #making labels (zero is noise, one is injection)
