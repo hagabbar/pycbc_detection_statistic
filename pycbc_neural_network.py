@@ -1,5 +1,5 @@
 #Simple Multilayer Neural Network to separate pycbc injections from noise triggers
-#Author: Hunter Gabbard
+#Authors: Hunter Gabbard, Tom Dent
 #Max Planck Institute for Gravitational Physics
 #How to use only one GPU device....export CUDA_VISIBLE_DEVICES="0" in command line prior to run
 #How to run in the background from the command line...python simple_neural_network.py -d NSBH01_ifar0-1.hdf,NSBH02_ifar0-1.hdf >/dev/null 2>err.txt &
@@ -254,25 +254,25 @@ def the_machine(args, n_features, train_weights, test_weights, train_data, test_
     model.add(BatchNormalization())
     model.add(GaussianDropout(0.1))
 
-    model.add(Dense(int(7./ret_rate)))
-    act
-    model.add(BatchNormalization())
-    model.add(dro)
+#    model.add(Dense(int(7./ret_rate)))
+#    act
+#    model.add(BatchNormalization())
+#    model.add(dro)
 
-    model.add(Dense(int(7./ret_rate)))
-    act
-    model.add(BatchNormalization())
-    model.add(dro)
+#    model.add(Dense(int(7./ret_rate)))
+#    act
+#    model.add(BatchNormalization())
+#    model.add(dro)
 
-    model.add(Dense(int(7./ret_rate)))
-    act
-    model.add(BatchNormalization())
-    model.add(dro)
+#    model.add(Dense(int(7./ret_rate)))
+#    act
+#    model.add(BatchNormalization())
+#    model.add(dro)
 
-    model.add(Dense(int(7./ret_rate)))
-    act
-    model.add(BatchNormalization())
-    model.add(dro)
+#    model.add(Dense(int(7./ret_rate)))
+#    act
+#    model.add(BatchNormalization())
+#    model.add(dro)
 
     #Additional hidden lay testing
     #model.add(Dense(int(7./ret_rate)))
