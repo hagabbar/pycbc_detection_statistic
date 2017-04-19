@@ -40,6 +40,8 @@ def load_back_data(data, params):
             for key in params:
                 if key == 'time':
                     dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                elif key == 'chirp_m':
+                    dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:,0]).reshape((h1['%s/%s' % (ifo,'maxsnr')].shape[0],1))
                 else:
                     dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
                     back[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
@@ -48,6 +50,9 @@ def load_back_data(data, params):
             for key in params:
                 if key == 'time':
                     tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                    dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
+                elif key == 'chirp_m':
+                    tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:,0]).reshape((h1['%s/%s' % (ifo,'maxsnr')].shape[0],1))
                     dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
                 else:
                     tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
@@ -59,7 +64,7 @@ def load_back_data(data, params):
 
     for idx, key in enumerate(params):
         print key
-        if key == 'time':
+        if key == 'time' or key == 'chirp_m':
             continue
         elif idx == 0:
             back_comb = back[key]
@@ -82,6 +87,8 @@ def load_inj_data(data, params, dict_comb, weight):
                 # treat inj distance differently
                 if key == 'dist_inj' or key == 'opt_snr' or key == 'time_inj':
                     dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                elif key == 'chirp_m_inj':
+                    dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:,0]).reshape((h1['%s/%s' % (ifo,'maxsnr_inj')].shape[0],1))
                 else:
                     dict_comb[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
                     inj[key] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
@@ -89,6 +96,9 @@ def load_inj_data(data, params, dict_comb, weight):
             for key in params:
                 if key == 'dist_inj' or key == 'opt_snr' or key == 'time_inj':  # distance goes into dict_comb but not into inj_comb
                     tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
+                    dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
+                elif key == 'chirp_m_inj':
+                    tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:,0]).reshape((h1['%s/%s' % (ifo,'maxsnr_inj')].shape[0],1))
                     dict_comb[key] = np.vstack((dict_comb[key], tmp_comb[key+'_new']))
                 else:
                     tmp_comb[key+'_new'] = np.asarray(h1['%s/%s' % (ifo,key)][:]).reshape((h1['%s/%s' % (ifo,key)].shape[0],1))
@@ -98,15 +108,17 @@ def load_inj_data(data, params, dict_comb, weight):
     #Create opt_snr mask so as to remove those injections with optimal snr of zero
     mask = np.invert(np.isinf(dict_comb['opt_snr']))
     
-    #Saving injection gps time
+    #Saving injection gps time and chirp mass
     if weight == 'optimal_snr':
         inj_time = dict_comb['time_inj'][mask].reshape((dict_comb['maxsnr_inj'][mask].shape[0],1))
+        inj_chirpm = dict_comb['chirp_m_inj'][mask].reshape((dict_comb['maxsnr_inj'][mask].shape[0],1))
     elif weight == 'distance':
         inj_time = dict_comb['time_inj'].reshape((dict_comb['maxsnr_inj'].shape[0],1))
+        inj_chirpm = dict_comb['chirp_m_inj'].reshape((dict_comb['maxsnr_inj'].shape[0],1))
 
     for idx, key in enumerate(params):
         print key
-        if key == 'dist_inj' or key == 'opt_snr' or key == 'time_inj':
+        if key == 'dist_inj' or key == 'opt_snr' or key == 'time_inj' or key == 'chirp_m_inj':
             continue
         elif idx == 0 and weight == 'optimal_snr':
             inj_comb = inj[key][mask].reshape((dict_comb['maxsnr_inj'][mask].shape[0],1))  
@@ -116,7 +128,7 @@ def load_inj_data(data, params, dict_comb, weight):
             inj_comb = np.hstack((inj_comb, inj[key][mask].reshape((dict_comb['maxsnr_inj'][mask].shape[0],1)))) 
         elif idx > 0 and weight == 'distance':
             inj_comb = np.hstack((inj_comb, inj[key]))
-    return inj_comb, dict_comb, inj_time
+    return inj_comb, dict_comb, inj_time, inj_chirpm
 
 #Generate source distance injection weights
 #def inj_weight_calc(dict_comb):
@@ -130,7 +142,7 @@ def load_inj_data(data, params, dict_comb, weight):
 #    return np.asarray(inj_weights_pre).reshape((dict_comb['maxsnr_inj'].shape[0],1))
 
 #Generate optimal snr injection weights
-def inj_weight_calc(dict_comb, weight):
+def inj_weight_calc(dict_comb, weight, inj_chirpm):
     print 'calculating injection weights'
     
     if weight == 'optimal_snr':
@@ -147,9 +159,10 @@ def inj_weight_calc(dict_comb, weight):
     elif weight == 'distance':
         inj_weights_pre = []
         dist_inj = dict_comb['dist_inj']
-        w_mean = (dist_inj**2).mean()
+        inj_chirpm = dict_comb['chirp_m_inj']
+        w_mean = ((inj_chirpm**(-11./3.))*(dist_inj**2)).mean()
         for idx, val in enumerate(dict_comb['maxsnr_inj']):
-            inj_weights_pre.append((dist_inj[idx][0] ** 2) / w_mean)   
+            inj_weights_pre.append(((inj_chirpm[idx]**(-11./3.))*(dist_inj[idx][0] ** 2)) / w_mean)  
         inj_weights_pre = np.asarray(inj_weights_pre).reshape((dict_comb['maxsnr_inj'].shape[0],1))  
         
     return inj_weights_pre
@@ -467,7 +480,7 @@ def feature_hists(run_num, out_dir, now, params, pre_proc_log, nn_train, nn_test
             pl.close()
 
 
-def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data_p, params, back_test, hist, pred_prob, pre_proc_log, train_times, test_times):
+def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data_p, params, back_test, hist, pred_prob, pre_proc_log, train_times, test_times, dict_comb):
 
     print 'plotting training metrics'
     print hist.history.keys()
@@ -502,6 +515,23 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
     pl.close()
 
     n_noise = len(back_test)
+    #For weighting diagnostic purposes ONLY. Remove when done with diagnostics
+    print 'plotting scatter loglog plot of duration as a funciton of chrip mass'
+    tmp_dur_inj = dict_comb['template_duration_inj']
+    tmp_dur = dict_comb['template_duration']
+    inj_chirpm = dict_comb['chirp_m_inj']
+    bg_chirpm = dict_comb['chirp_m']
+    pl.figure(run_num+3)
+    pl.scatter(np.log(tmp_dur), np.log(bg_chirpm), marker='o', s=8, c='k', edgecolor='none', label='background', alpha=0.3)
+    pl.scatter(np.log(tmp_dur_inj), np.log(inj_chirpm), marker='^', s=10, c='r', edgecolor='none', label='injection', alpha=0.4)
+    pl.legend(frameon=True)
+    pl.title('Chirp Mass vs. Template Duration')
+    pl.xlabel('log(Template Duration)')
+    pl.ylabel('log(Chirp Mass)')
+    pl.savefig('%s/run_%s/chirpm_vs_tempdur' % (out_dir,now))
+    pl.close()
+
+
     for idx,lab in enumerate(zip(params,pre_proc_log)):
         print('plotting score vs. %s' % lab[0])
         pl.figure(run_num+idx)
@@ -552,7 +582,7 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
 #Main function
 def main():
     #For TESTING ONLY
-    shutil.rmtree('/home/hunter.gabbard/public_html/simple_neural_net/testing/classification/L1-all_of_O1_run/top_5_trigs/run_test3')
+    #shutil.rmtree('/home/hunter.gabbard/public_html/simple_neural_net/testing/classification/L1-all_of_O1_run/top_5_trigs/run_test3')
 
  
     #Configure tensorflow to use gpu memory as needed
@@ -599,8 +629,8 @@ def main():
     os.makedirs('%s/run_%s/colored_plots' % (out_dir,now))
     os.makedirs('%s/run_%s/histograms' % (out_dir,now))
 
-    back_params = ['count_in', 'count_out', 'maxnewsnr', 'maxsnr', 'ratio_chirp', 'delT', 'template_duration', 'time']
-    inj_params = ['count_in_inj', 'count_out_inj', 'maxnewsnr_inj', 'maxsnr_inj', 'ratio_chirp_inj', 'delT_inj', 'template_duration_inj', 'dist_inj', 'opt_snr', 'time_inj']
+    back_params = ['count_in', 'count_out', 'maxnewsnr', 'maxsnr', 'ratio_chirp', 'delT', 'template_duration', 'time', 'chirp_m']
+    inj_params = ['count_in_inj', 'count_out_inj', 'maxnewsnr_inj', 'maxsnr_inj', 'ratio_chirp_inj', 'delT_inj', 'template_duration_inj', 'dist_inj', 'opt_snr', 'time_inj', 'chirp_m_inj']
     pre_proc_log = [True,True,True,True,True,False,True] #True means to take log of feature, False means don't take log of feature during pre-processing
     batch_size = args.batch_size
     run_num = args.run_number
@@ -608,10 +638,10 @@ def main():
 
     #Downloading background and injection triggers
     bg_trig, dict_comb, back_time = load_back_data(args.bg_files, back_params)
-    inj_trig, dict_comb, inj_time = load_inj_data(args.inj_files, inj_params, dict_comb, weight)
+    inj_trig, dict_comb, inj_time, inj_chirpm = load_inj_data(args.inj_files, inj_params, dict_comb, weight)
 
     #Getting injection weights for later use in neural network training process
-    inj_weights = inj_weight_calc(dict_comb, weight)
+    inj_weights = inj_weight_calc(dict_comb, weight, inj_chirpm)
 
     #Set random shuffles of bg and inj features once and for all
     indices_bg = np.random.permutation(bg_trig.shape[0])
@@ -648,7 +678,7 @@ def main():
     ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob, prob_sort_noise, prob_sort_inj = ROC_inj_and_newsnr(batch_size, back_test, test_data, inj_w_test, inj_test, lab_test, out_dir, now, model, train_times, test_times, test_data_p)
 
     #Score/histogram plots
-    main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data, back_params, back_test, hist, pred_prob, pre_proc_log, train_times, test_times)
+    main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data, back_params, back_test, hist, pred_prob, pre_proc_log, train_times, test_times, dict_comb)
 
     #Write data to an hdf file
     with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:

@@ -194,6 +194,7 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
 	delT = []
         delta_chirp = []
         ratio_chirp = []
+        chirp_m = []
 
 	margl_inj = []
         count_inj = []
@@ -249,6 +250,7 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
                     m1_new_snr = mass1_full[l:r][idx_mxnewsnr]                       
                     m2_new_snr = mass2_full[l:r][idx_mxnewsnr]
                     chirp_snr = pnutils.mass1_mass2_to_mchirp_eta(m1_snr, m2_snr)
+                    chirp_m.append(chirp_snr)
                     chirp_new_snr = pnutils.mass1_mass2_to_mchirp_eta(m1_new_snr, m2_new_snr)
                
 
@@ -322,6 +324,7 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
         o['%s/maxnewsnr_inj' % ifo] = numpy.array(maxnewsnr_inj)
         o['%s/template_duration_inj' % ifo] = numpy.array(tmp_dur_inj)
         o['%s/opt_snr' % ifo] = numpy.array(opt_snr_final)
+        o['%s/chirp_m' % ifo] = numpy.array(chirp_m)
 
         if args.just_inj == 'False':
             o['%s/delT' % ifo] = numpy.array(delT)
