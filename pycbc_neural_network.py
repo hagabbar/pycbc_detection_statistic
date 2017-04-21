@@ -252,7 +252,7 @@ def samp_weight(bg_comb, inj_comb, inj_w_train, inj_w_test, tt_perc):
     train_weights = np.vstack((bg_w_train, inj_w_train)).flatten()
     test_weights = np.vstack((bg_w_test, inj_w_test)).flatten()
 
-    return train_weights, test_weights
+    return train_weights, test_weights, bg_weights
 
 def the_machine(args, n_features, train_weights, test_weights, train_data, test_data, lab_train, lab_test, out_dir, now):
     model = Sequential()
@@ -480,7 +480,7 @@ def feature_hists(run_num, out_dir, now, params, pre_proc_log, nn_train, nn_test
             pl.close()
 
 
-def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data_p, params, back_test, hist, pred_prob, pre_proc_log, train_times, test_times, dict_comb):
+def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data_p, params, back_test, hist, pred_prob, pre_proc_log, train_times, test_times, dict_comb, bg_weights, inj_weights):
 
     print 'plotting training metrics'
     print hist.history.keys()
@@ -512,6 +512,20 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
     pl.ylim(ymin=1e-4)
     pl.legend(frameon=True)
     pl.savefig('%s/run_%s/score_hist.png' % (out_dir,now))
+    pl.close()
+
+    print 'plotting histogram of weights'
+    pl.figure(run_num+2)
+    numpy_hist_1, bins_1 = np.histogram(bg_weights, bins=100, density=True)
+    numpy_hist_2, bins_2 = np.histogram(inj_weights, bins=100, density=True) 
+    width_1 = (bins_1[1] - bins_1[0])
+    width_2 = (bins_2[1] - bins_2[0])
+    center_1 = (bins_1[:-1] + bins_1[1:]) / 2
+    center_2 = (bins_2[:-1] + bins_2[1:]) / 2
+    pl.bar(center_1, numpy_hist_1, log=True, label='background',color='b', alpha=0.6, align='center', width=width_1)
+    pl.bar(center_2, numpy_hist_2, log=True, label='injection', color='r', alpha=0.6, align='center', width=width_2)
+    pl.legend(frameon=True)
+    pl.savefig('%s/run_%s/weights_hist.png' % (out_dir,now))
     pl.close()
 
     n_noise = len(back_test)
@@ -666,7 +680,7 @@ def main():
     lab_train, lab_test, labels_all = label_maker(bg_trig, inj_trig, args.train_perc)
 
     #Creating sample weights vector
-    train_weights, test_weights = samp_weight(bg_trig, inj_trig, inj_w_train, inj_w_test, args.train_perc)
+    train_weights, test_weights, bg_weights = samp_weight(bg_trig, inj_trig, inj_w_train, inj_w_test, args.train_perc)
 
     #Plot histograms of features
     feature_hists(run_num, out_dir, now, back_params, pre_proc_log, sum(lab_train.flatten() == 0), len(back_test), train_data, test_data)
@@ -678,7 +692,7 @@ def main():
     ROC_w_sum, ROC_newsnr_sum, FAP, pred_prob, prob_sort_noise, prob_sort_inj = ROC_inj_and_newsnr(batch_size, back_test, test_data, inj_w_test, inj_test, lab_test, out_dir, now, model, train_times, test_times, test_data_p)
 
     #Score/histogram plots
-    main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data, back_params, back_test, hist, pred_prob, pre_proc_log, train_times, test_times, dict_comb)
+    main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_data, back_params, back_test, hist, pred_prob, pre_proc_log, train_times, test_times, dict_comb, bg_weights, inj_weights)
 
     #Write data to an hdf file
     with h5py.File('%s/run_%s/nn_data.hdf' % (out_dir,now), 'w') as hf:
