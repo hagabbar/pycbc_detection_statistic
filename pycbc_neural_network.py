@@ -516,13 +516,9 @@ def main_plotter(prob_sort_noise, prob_sort_inj, run_num, out_dir, now, test_dat
 
     print 'plotting histogram of weights'
     pl.figure(run_num+2)
-    numpy_hist_1, bins_1 = np.histogram(bg_weights, bins=100, density=True)
     numpy_hist_2, bins_2 = np.histogram(inj_weights, bins=100, density=True) 
-    width_1 = (bins_1[1] - bins_1[0])
     width_2 = (bins_2[1] - bins_2[0])
-    center_1 = (bins_1[:-1] + bins_1[1:]) / 2
     center_2 = (bins_2[:-1] + bins_2[1:]) / 2
-    pl.bar(center_1, numpy_hist_1, log=True, label='background',color='b', alpha=0.6, align='center', width=width_1)
     pl.bar(center_2, numpy_hist_2, log=True, label='injection', color='r', alpha=0.4, align='center', width=width_2)
     pl.legend(frameon=True)
     pl.savefig('%s/run_%s/weights_hist.png' % (out_dir,now))
