@@ -100,8 +100,6 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
         newsnr_inj = events.newsnr(snr_inj, rchisq_inj)
         del rchisq_inj
 
-        mass1_inj = mass1[template_id_inj]
-        mass2_inj = mass2[template_id_inj]
 
         time = f['end_time'][:]        
         if args.just_inj == 'False':
@@ -115,9 +113,6 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
             del chisq_dof
             newsnr = events.newsnr(snr, rchisq)
             del rchisq
-
-            mass1_full = mass1[template_id]
-            mass2_full = mass2[template_id]
 
         # apply vetoes
         try: 
@@ -139,6 +134,9 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
             template_dur_inj = template_dur_inj[tsort_inj]
             newsnr_inj = newsnr_inj[tsort_inj]
             template_id_inj = template_id_inj[tsort_inj]
+
+            mass1_inj = mass1[template_id_inj]
+            mass2_inj = mass2[template_id_inj]
         else:
             print "sure, it was defined"
             mask, segs = events.veto.indices_outside_segments(time, [args.veto_file], ifo=ifo,
@@ -154,6 +152,9 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
 	        newsnr = newsnr[mask][tsort]
                 template_id = template_id[mask][tsort]
 
+                mass1_full = mass1[template_id]
+                mass2_full = mass2[template_id]
+
 	    #For injections...
 	    mask_inj, segs_inj = events.veto.indices_outside_segments(time_inj, [args.veto_file], ifo=ifo,
                 segment_name=args.veto_segment_name)
@@ -165,6 +166,9 @@ with h5py.File(args.single_trigger_files, 'r') as hf, h5py.File(args.inj_file, '
             template_dur_inj = template_dur_inj[mask_inj][tsort_inj]
             newsnr_inj = newsnr_inj[mask_inj][tsort_inj]
             template_id_inj = template_id_inj[mask_inj][tsort_inj]
+
+            mass1_inj = mass1[template_id_inj]
+            mass2_inj = mass2[template_id_inj]
 
 	#Take only triggers found to be in coincidence
         if args.just_inj == 'False':
