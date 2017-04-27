@@ -160,9 +160,9 @@ def inj_weight_calc(dict_comb, weight, inj_chirpm):
         inj_weights_pre = []
         dist_inj = dict_comb['dist_inj']
         inj_chirpm = dict_comb['chirp_m_inj']
-        w_mean = ((inj_chirpm**(-8./3.))*(dist_inj**2)).mean()
+        w_mean = ((inj_chirpm**(-5./3.))*(dist_inj**2)).mean()
         for idx, val in enumerate(dict_comb['maxsnr_inj']):
-            inj_weights_pre.append(((inj_chirpm[idx]**(-8./3.))*(dist_inj[idx][0] ** 2)) / w_mean)  
+            inj_weights_pre.append(((inj_chirpm[idx]**(-5./3.))*(dist_inj[idx][0] ** 2)) / w_mean)  
         inj_weights_pre = np.asarray(inj_weights_pre).reshape((dict_comb['maxsnr_inj'].shape[0],1))  
         
     return inj_weights_pre
@@ -272,36 +272,36 @@ def the_machine(args, n_features, train_weights, test_weights, train_data, test_
     model.add(BatchNormalization())
     model.add(dro)
 
-    model.add(Dense(int(7./ret_rate)))
-    act
-    model.add(BatchNormalization())
-    model.add(dro)
+#    model.add(Dense(int(7./ret_rate)))
+#    act
+#    model.add(BatchNormalization())
+#    model.add(dro)
 
-    #model.add(Dense(int(7./ret_rate)))
-    #act
-    #model.add(BatchNormalization())
-    #model.add(dro)
+#    model.add(Dense(int(7./ret_rate)))
+#    act
+#    model.add(BatchNormalization())
+#    model.add(dro)
 
-    #model.add(Dense(int(7./ret_rate)))
-    #act
-    #model.add(BatchNormalization())
-    #model.add(dro)
+#    model.add(Dense(int(7./ret_rate)))
+#    act
+#    model.add(BatchNormalization())
+#    model.add(dro)
 
     #Additional hidden lay testing
-    #model.add(Dense(int(7./ret_rate)))
-    #act
-    #model.add(BatchNormalization())
-    #model.add(dro)
+#    model.add(Dense(int(7./ret_rate)))
+#    act
+#    model.add(BatchNormalization())
+#    model.add(dro)
 
-    #model.add(Dense(int(7./ret_rate)))
-    #act
-    #model.add(BatchNormalization())
-    #model.add(dro)
+#    model.add(Dense(int(7./ret_rate)))
+#    act
+#    model.add(BatchNormalization())
+#    model.add(dro)
 
-    #model.add(Dense(int(7./ret_rate)))
-    #act
-    #model.add(BatchNormalization())
-    #model.add(dro)
+#    model.add(Dense(int(7./ret_rate)))
+#    act
+#    model.add(BatchNormalization())
+#    model.add(dro)
 
 
     model.add(Dense(1, init='normal', activation='sigmoid'))
@@ -368,12 +368,12 @@ def ROC_inj_and_newsnr(batch_size,trig_test,test_data,inj_test_weight,inj_test,l
     print '\nFive highest ranked background events by neural network ...'
     print(fmt.format('', 'GPS Time', '  -- count_in -- count_out -- maxnewsnr -- maxsnr -- ratio_chirp delT -- template_duration'))
 
-    #Storing Five highest ranked background events by neural network into txt file
+    #Storing ten highest ranked background events by neural network into txt file
     f = open('%s/run_%s/highest_ranked_trigs.txt' % (out_dir,now), 'a')
-    print >>f, '\nFive highest ranked background events by neural network ...'
+    print >>f, '\nTen highest ranked background events by neural network ...'
     print >>f, fmt.format('', 'GPS Time', '  -- count_in -- count_out -- maxnewsnr -- maxsnr -- ratio_chirp delT -- template_duration')
 
-    for i, (gpstime, features) in enumerate(zip(bg_time_sorted[0:5], bg_sorted[0:5,:])):
+    for i, (gpstime, features) in enumerate(zip(bg_time_sorted[0:10], bg_sorted[0:10,:])):
         print(fmt.format(i, gpstime, features))    
         print >>f, fmt.format(i,gpstime, features)
 
