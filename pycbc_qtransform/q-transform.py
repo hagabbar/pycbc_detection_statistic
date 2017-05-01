@@ -39,6 +39,7 @@ from pycbc.psd import welch, interpolate
 import urllib
 import datetime
 from scipy.signal import tukey
+from numpy import fft as npfft
 
 
 def qtransform(data):
@@ -59,10 +60,41 @@ def qtransform(data):
     indices = _get_indices(dur)
 
     #Apply window to fft
-    windowed = fseries[self.get_data_indices] * get_window(dur, indices, f0, qprime, Q, sampling)
-    print windowed
- 
+    windowed = fseries[get_data_indices(dur, f0, indices)] * get_window(dur, indices, f0, qprime, Q, sampling)
+
+    # pad data, move negative frequencies to the end, and IFFT
+    padded = np.pad(windowed, padding(window_size, dur, f0, Q), mode='constant')
+    wenergy = npfft.ifftshift(padded)
+
+    # return a `TimeSeries`
+    if epoch is None:
+        epoch = fseries.epoch
+    tdenergy = npfft.ifft(wenergy)
+    cenergy = TimeSeries(tdenergy, x0=epoch,
+                         dx=self.duration/tdenergy.size, copy=False)
+    if normalized:
+        energy = type(cenergy)(
+            cenergy.value.real ** 2. + cenergy.value.imag ** 2.,
+            x0=cenergy.x0, dx=cenergy.dx, copy=False)
+        meanenergy = energy.mean()
+        return energy / meanenergy
+    else:
+        return cenergy
+    
     return None
+
+def padding(window_size, dur, f0, Q):
+        """The `(left, right)` padding required for the IFFT
+        :type: `tuple` of `int`
+        """
+        pad = n_tiles(dur,f0,Q) - window_size
+        return (int((pad - 1)/2.), int((pad + 1)/2.))
+
+def get_data_indices(dur, f0, indices):
+    """Returns the index array of interesting frequencies for this row
+    """
+    return np.round(indices + 1 +
+                       f0 * dur).astype(int)
 
 def _get_indices(dur):
     half = int((int(dur) - 1.) / 2.) 
