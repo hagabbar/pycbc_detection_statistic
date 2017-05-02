@@ -30,7 +30,7 @@ This module retrives a timeseries and then calculates the q-transform of that ti
 
 from math import pi, ceil, log
 import numpy as np
-from pycbc.types import FrequencySeries, TimeSeries
+from pycbc.types.timeseries import FrequencySeries, TimeSeries
 import sys
 from pycbc.frame import read_frame
 from pycbc.filter import highpass_fir, matched_filter
@@ -41,15 +41,25 @@ import datetime
 from scipy.signal import tukey
 from numpy import fft as npfft
 
+__author__ = 'Hunter Gabbard <hunter.gabbard@ligo.org>'
+__credits__ = 'Duncan Macleod <duncan.macleod@ligo.org>'
 
-def qtransform(data):
-    #generate tiling
+def qtransform(data, Q, f0, sampling, normalized):
+
+    """
+    Parameters
+    ----------
+    data : `LIGO gwf frame file`
+        raw time-series data set
+    normalized : `bool`, optional
+        normalize the energy of the output, if `False` the output
+        is the complex `~numpy.fft.ifft` output of the Q-tranform
+    """
 
     #Q-transform data for each (Q, frequency) tile
-    Q = 20 # self-explanatory ... self.q
+
+    #Initialize parameters
     qprime = Q / 11**(1/2.) # ... self.qprime
-    f0 = 5 # initiail frequency ... self.frequency
-    sampling = 16384 #sampling frequency
     dur = int(len(data)) / sampling # length of your data chunk in seconds ... self.duration
     fseries = TimeSeries.to_frequencyseries(data)
       
@@ -67,21 +77,19 @@ def qtransform(data):
     wenergy = npfft.ifftshift(padded)
 
     # return a `TimeSeries`
-    if epoch is None:
-        epoch = fseries.epoch
     tdenergy = npfft.ifft(wenergy)
-    cenergy = TimeSeries(tdenergy, x0=epoch,
-                         dx=self.duration/tdenergy.size, copy=False)
+    cenergy = TimeSeries(tdenergy,
+                         delta_t=1, copy=False) # Normally delta_t is dur/tdenergy.size ... must figure out better way of doing this
     if normalized:
         energy = type(cenergy)(
-            cenergy.value.real ** 2. + cenergy.value.imag ** 2.,
-            x0=cenergy.x0, dx=cenergy.dx, copy=False)
-        meanenergy = energy.mean()
-        return energy / meanenergy
+            cenergy.real() ** 2. + cenergy.imag() ** 2.,
+            delta_t=1, copy=False)
+        meanenergy = energy.numpy().mean()
+        result = energy / meanenergy
     else:
-        return cenergy
-    
-    return None
+        result = cenergy
+   
+    return result
 
 def padding(window_size, dur, f0, Q):
         """The `(left, right)` padding required for the IFFT
@@ -140,18 +148,25 @@ def deltam():
     return 2 * (mismatch / 3.) ** (1/2.)
 
 def main():
+    #Initialize parameters
+    normalized = True # Set this as needed
+    Q = 20 # self-explanatory ... self.q
+    f0 = 5 # initiail frequency ... self.frequency
+    sampling = 4096 #sampling frequency
+
     # Read data and remove low frequency content
     fname = 'H-H1_LOSC_4_V2-1126259446-32.gwf'
     url = "https://losc.ligo.org/s/events/GW150914/" + fname
     urllib.urlretrieve(url, filename=fname)
     h1 = read_frame('H-H1_LOSC_4_V2-1126259446-32.gwf', 'H1:LOSC-STRAIN')
+    h1 = np.random.normal(size=256*4096)
     h1 = highpass_fir(h1, 15, 8)
 
     # Calculate the noise spectrum
     psd = interpolate(welch(h1), 1.0 / 32)
 
     #perform q-transform on timeseries
-    q = qtransform(h1)
-    print q
+    q = qtransform(h1, Q, f0, sampling, normalized)
+
 if __name__ == '__main__':
     main()
