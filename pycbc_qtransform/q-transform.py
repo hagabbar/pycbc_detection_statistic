@@ -31,7 +31,7 @@ This module retrives a timeseries and then calculates the q-transform of that ti
 from math import pi, ceil, log
 import numpy as np
 from pycbc.types.timeseries import FrequencySeries, TimeSeries
-import sys
+import os, sys
 from pycbc.frame import read_frame
 from pycbc.filter import highpass_fir, matched_filter
 from pycbc.waveform import get_fd_waveform
@@ -40,6 +40,11 @@ import urllib
 import datetime
 from scipy.signal import tukey
 from numpy import fft as npfft
+from matplotlib import use
+use('Agg')
+from matplotlib import pyplot as pl
+import argparse
+import datetime
 
 __author__ = 'Hunter Gabbard <hunter.gabbard@ligo.org>'
 __credits__ = 'Duncan Macleod <duncan.macleod@ligo.org>'
@@ -148,18 +153,38 @@ def deltam():
     return 2 * (mismatch / 3.) ** (1/2.)
 
 def main():
+    #Get Current time
+    cur_time = datetime.datetime.now()
+
+    #construct the argument parse and parse the arguments
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-u", "--usertag", required=False, default=cur_time,
+        help="label for given run")
+    ap.add_argument("-o", "--output-dir", required=False,
+        help="path to output directory")
+    ap.add_argument("-n", "--normalize", required=False, default=True,
+        help="normalize the energy of the output")
+    ap.add_argument("-s", "--samp-freq", required=True, type=float,
+        help="Sampling frequency of channel")
+
+    args = ap.parse_args()
+
+
     #Initialize parameters
-    normalized = True # Set this as needed
+    out_dir = args.output_dir
+    now = args.usertag
+    #os.makedirs('%s/run_%s' % (out_dir,now))  # Fail early if the dir already exists
+    normalized = args.normalize # Set this as needed
     Q = 20 # self-explanatory ... self.q
     f0 = 5 # initiail frequency ... self.frequency
-    sampling = 4096 #sampling frequency
+    sampling = args.samp_freq #sampling frequency
 
     # Read data and remove low frequency content
     fname = 'H-H1_LOSC_4_V2-1126259446-32.gwf'
     url = "https://losc.ligo.org/s/events/GW150914/" + fname
     urllib.urlretrieve(url, filename=fname)
     h1 = read_frame('H-H1_LOSC_4_V2-1126259446-32.gwf', 'H1:LOSC-STRAIN')
-    h1 = np.random.normal(size=256*4096)
+    h1 = TimeSeries(np.random.normal(size=256*4096), delta_t = 1. / sampling)
     h1 = highpass_fir(h1, 15, 8)
 
     # Calculate the noise spectrum
@@ -167,6 +192,17 @@ def main():
 
     #perform q-transform on timeseries
     q = qtransform(h1, Q, f0, sampling, normalized)
+
+    #FOR DIAGNOSTIC PURPOSES ONLY
+    #pl.figure()
+    #numpy_hist, bins = np.histogram(q, bins=100, density=True)
+    #width = (bins[1] - bins[0])
+    #center = (bins[:-1] + bins[1:]) / 2
+    #pl.bar(center, numpy_hist, log=True, label='normalised energies', color='r', alpha=0.4, align='center', width=width)
+    #pl.legend(frameon=True)
+    #pl.savefig('%s/run_%s/energies_hist.png' % (out_dir,now))
+    #pl.close()
+ 
 
 if __name__ == '__main__':
     main()
