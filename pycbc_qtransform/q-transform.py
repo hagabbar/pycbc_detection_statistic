@@ -28,7 +28,7 @@
 This module retrives a timeseries and then calculates the q-transform of that time series
 """
 
-from math import pi, ceil, log
+from math import pi, ceil, log, exp
 import numpy as np
 from pycbc.types.timeseries import FrequencySeries, TimeSeries
 import os, sys
@@ -49,6 +49,67 @@ import datetime
 __author__ = 'Hunter Gabbard <hunter.gabbard@ligo.org>'
 __credits__ = 'Duncan Macleod <duncan.macleod@ligo.org>'
 
+def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
+    """
+    Parameters
+    """
+    deltam = deltam_f(mismatch)
+    qrange = (float(qrange[0]), float(qrange[1]))
+    frange = [float(frange[0]), float(frange[1])]
+    dur = int(len(h1)) / sampling # length of your data chunk in seconds ... self.duration
+
+    qs = list(_iter_qs(qrange, deltam))
+    if frange[0] == 0:  # set non-zero lower frequency
+        frange[0] = 50 * max(qs) / (2 * pi * dur)
+    if np.isinf(frange[1]):  # set non-infinite upper frequency
+        frange[1] = sampling / 2 / (1 + 11**(1/2.) / min(qs))
+
+    #Lets now define the whole tiling (e.g. choosing all tiling in planes)
+    for q in qs:
+        qtilefreq = np.array(list(_iter_frequencies(q, frange, mismatch, dur)))
+        qlst = np.empty(len(qtilefreq), dtype=float)
+        qlst.fill(q)
+        qtiles_array = np.vstack((qtilefreq,qlst)).T
+        qplane = tuple(map(tuple,qtiles_array))
+
+    #perform q-transform on timeseries
+    #q = qtransform(h1, Q, f0, sampling, normalized)
+
+def deltam_f(mismatch):
+    """Fractional mismatch between neighbouring tiles
+    :type: `float`
+    """
+    return 2 * (mismatch / 3.) ** (1/2.)
+
+
+def _iter_qs(qrange, deltam):
+    """Iterate over the Q values
+    """
+
+    # work out how many Qs we need
+    cumum = log(qrange[1] / qrange[0]) / 2**(1/2.)
+    nplanes = int(max(ceil(cumum / deltam), 1))
+    dq = cumum / nplanes
+    for i in xrange(nplanes):
+        yield qrange[0] * exp(2**(1/2.) * dq * (i + .5))
+    raise StopIteration()
+
+def _iter_frequencies(q, frange, mismatch, dur):
+    """Iterate over the frequencies of this `QPlane`
+    """
+    # work out how many frequencies we need
+    minf, maxf = frange
+    fcum_mismatch = log(maxf / minf) * (2 + q**2)**(1/2.) / 2.
+    nfreq = int(max(1, ceil(fcum_mismatch / deltam_f(mismatch))))
+    fstep = fcum_mismatch / nfreq
+    fstepmin = 1 / dur
+    # for each frequency, yield a QTile
+    for i in xrange(nfreq):
+        yield (minf *
+               exp(2 / (2 + q**2)**(1/2.) * (i + .5) * fstep) //
+               fstepmin * fstepmin)
+    raise StopIteration()
+
 def qtransform(data, Q, f0, sampling, normalized):
 
     """
@@ -59,6 +120,12 @@ def qtransform(data, Q, f0, sampling, normalized):
     normalized : `bool`, optional
         normalize the energy of the output, if `False` the output
         is the complex `~numpy.fft.ifft` output of the Q-tranform
+    f0 :
+        central frequency
+    sampling :
+        sampling frequency of channel
+    normalized:
+        normalize output tile energies? 
     """
 
     #Q-transform data for each (Q, frequency) tile
@@ -178,6 +245,9 @@ def main():
     Q = 20 # self-explanatory ... self.q
     f0 = 5 # initiail frequency ... self.frequency
     sampling = args.samp_freq #sampling frequency
+    mismatch=.2
+    qrange=(4,64)
+    frange=(0,np.inf)
 
     # Read data and remove low frequency content
     fname = 'H-H1_LOSC_4_V2-1126259446-32.gwf'
@@ -190,8 +260,8 @@ def main():
     # Calculate the noise spectrum
     psd = interpolate(welch(h1), 1.0 / 32)
 
-    #perform q-transform on timeseries
-    q = qtransform(h1, Q, f0, sampling, normalized)
+    #perform Q-tiling
+    Qbase = qtiling(h1, qrange, frange, sampling, normalized, mismatch)
 
     #FOR DIAGNOSTIC PURPOSES ONLY
     #pl.figure()
