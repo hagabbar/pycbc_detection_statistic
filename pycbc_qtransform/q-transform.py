@@ -57,6 +57,9 @@ def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
     qrange = (float(qrange[0]), float(qrange[1]))
     frange = [float(frange[0]), float(frange[1])]
     dur = int(len(h1)) / sampling # length of your data chunk in seconds ... self.duration
+    print dur
+    sys.exit()
+    qplane_tile_dict = {}
 
     qs = list(_iter_qs(qrange, deltam))
     if frange[0] == 0:  # set non-zero lower frequency
@@ -64,18 +67,34 @@ def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
     if np.isinf(frange[1]):  # set non-infinite upper frequency
         frange[1] = sampling / 2 / (1 + 11**(1/2.) / min(qs))
 
-    #Lets now define the whole tiling (e.g. choosing all tiling in planes)
+    #lets now define the whole tiling (e.g. choosing all tiling in planes)
     for q in qs:
         qtilefreq = np.array(list(_iter_frequencies(q, frange, mismatch, dur)))
         qlst = np.empty(len(qtilefreq), dtype=float)
         qlst.fill(q)
         qtiles_array = np.vstack((qtilefreq,qlst)).T
         qplane_tiles_list = list(map(tuple,qtiles_array))
-        qplane_dict = {}
-        qplane_dict[q] = qplane_tiles_list 
+        qplane_tile_dict[q] = qplane_tiles_list 
 
-    #perform q-transform on timeseries
-    #q = qtransform(h1, Q, f0, sampling, normalized)
+    #perform q-transform on each tile for each q-plane and pick out the tile that has the largest normalized energy 
+    #store q-transforms of each tile in a dict
+    qplane_qtrans_dict = {}
+ 
+    for i, key in enumerate(qplane_tile_dict):
+        print key
+        norm_energies_lst=[]
+        for tile in qplane_tile_dict[key]:
+            norm_energies = qtransform(h1, tile[1], tile[0], sampling, normalized)
+            norm_energies_lst.append(norm_energies)
+            if i == 0:
+                max_norm_energy = max(norm_energies)
+            elif max(norm_energies) > max_norm_energy:
+                max_norm_energy = max(norm_energies)
+
+        qplane_qtrans_dict[key] = np.array(norm_energies_lst)
+    print max_norm_energy
+    sys.exit() 
+
 
 def deltam_f(mismatch):
     """Fractional mismatch between neighbouring tiles
