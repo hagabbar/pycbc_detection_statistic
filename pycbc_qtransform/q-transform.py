@@ -70,7 +70,9 @@ def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
         qlst = np.empty(len(qtilefreq), dtype=float)
         qlst.fill(q)
         qtiles_array = np.vstack((qtilefreq,qlst)).T
-        qplane = tuple(map(tuple,qtiles_array))
+        qplane_tiles_list = list(map(tuple,qtiles_array))
+        qplane_dict = {}
+        qplane_dict[q] = qplane_tiles_list 
 
     #perform q-transform on timeseries
     #q = qtransform(h1, Q, f0, sampling, normalized)
