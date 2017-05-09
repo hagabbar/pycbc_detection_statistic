@@ -39,7 +39,7 @@ from pycbc.psd import welch, interpolate
 from pycbc.fft import ifft
 import urllib
 import datetime
-from scipy.signal import tukey
+from scipy.interpolate import (interp2d, InterpolatedUnivariateSpline)
 from numpy import fft as npfft
 from matplotlib import use
 use('Agg')
@@ -52,7 +52,7 @@ from matplotlib.pyplot import specgram
 __author__ = 'Hunter Gabbard <hunter.gabbard@ligo.org>'
 __credits__ = 'Duncan Macleod <duncan.macleod@ligo.org>'
 
-def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now):
+def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
     """
     Parameters
     """
@@ -88,7 +88,7 @@ def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now):
     # (Q, frequency) `TimeSeries` to have the same time resolution
     nx = int(abs(Segment(*outseg)) / tres)
     ny = frequencies.size
-    out = Spectrogram(numpy.zeros((nx, ny)), x0=outseg[0], dx=tres,
+    out = Spectrogram(np.zeros((nx, ny)), x0=outseg[0], dx=tres,
                       frequencies=frequencies)
     out._yindex = type(out.y0)(frequencies, out.y0.unit)
     # record Q in output
@@ -151,7 +151,7 @@ def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
         qplane_tiles_list = list(map(tuple,qtiles_array))
         qplane_tile_dict[q] = qplane_tiles_list 
 
-    return qplane_tile_dict
+    return qplane_tile_dict, frange
 
 def deltam_f(mismatch):
     """Fractional mismatch between neighbouring tiles
@@ -321,8 +321,6 @@ def main():
     now = args.usertag
     #os.makedirs('%s/run_%s' % (out_dir,now))  # Fail early if the dir already exists
     normalized = args.normalize # Set this as needed
-    Q = 20 # self-explanatory ... self.q
-    f0 = 5 # initiail frequency ... self.frequency
     sampling = args.samp_freq #sampling frequency
     mismatch=.2
     qrange=(4,64)
@@ -340,10 +338,10 @@ def main():
     psd = interpolate(welch(h1), 1.0 / 32)
 
     #perform Q-tiling
-    Qbase = qtiling(h1, qrange, frange, sampling, normalized, mismatch)
+    Qbase, frange = qtiling(h1, qrange, frange, sampling, normalized, mismatch)
 
     #Choose Q-plane and plot
-    Qplane(Qbase, h1, sampling, normalized, out_dir, now)
+    Qplane(Qbase, h1, sampling, normalized, out_dir, now, frange)
 
 if __name__ == '__main__':
     main()
