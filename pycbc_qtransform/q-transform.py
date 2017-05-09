@@ -47,13 +47,89 @@ from matplotlib import pyplot as pl
 import argparse
 import datetime
 
+from matplotlib.pyplot import specgram
+
 __author__ = 'Hunter Gabbard <hunter.gabbard@ligo.org>'
 __credits__ = 'Duncan Macleod <duncan.macleod@ligo.org>'
+
+def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now):
+    """
+    Parameters
+    """
+
+    #perform q-transform on each tile for each q-plane and pick out the tile that has the largest normalized energy 
+    #store q-transforms of each tile in a dict
+    qplane_qtrans_dict = {}
+    tres=.001
+
+    max_norm_energy = [] 
+    for i, key in enumerate(qplane_tile_dict):
+        print key
+        norm_energies_lst=[]
+        for tile in qplane_tile_dict[key]:
+            norm_energies = qtransform(h1, tile[1], tile[0], sampling, normalized)
+            print norm_energies
+            sys.exit()
+            norm_energies_lst.append(norm_energies)
+            if i == 0:
+                max_norm_energy.append(max(norm_energies))
+                max_norm_energy.append(tile)
+                max_norm_energy.append(key)
+            elif max(norm_energies) > max_norm_energy[0]:
+                max_norm_energy[0] = max(norm_energies)
+                max_norm_energy[1] = tile
+                max_norm_energy[2] = key
+        qplane_qtrans_dict[key] = np.array(norm_energies_lst)
+
+
+    # build regular Spectrogram from peak-Q data by interpolating each
+    #If you get lost, refer to https://github.com/gwpy/gwpy/blob/44d8d6381d2d03fb5d0b7d5484885512f9b841b1/gwpy/timeseries/timeseries.py
+    #Line 1780
+    # (Q, frequency) `TimeSeries` to have the same time resolution
+    nx = int(abs(Segment(*outseg)) / tres)
+    ny = frequencies.size
+    out = Spectrogram(numpy.zeros((nx, ny)), x0=outseg[0], dx=tres,
+                      frequencies=frequencies)
+    out._yindex = type(out.y0)(frequencies, out.y0.unit)
+    # record Q in output
+    out.q = peakq
+    # interpolate rows
+    for i, row in enumerate(norms)
+        row = row.crop(*outseg)
+        interp = InterpolatedUnivariateSpline(row.times.value, row.value)
+        out[:, i] = interp(out.times.value)
+
+    # then interpolate the spectrogram to increase the frequency resolution
+    # --- this is done because duncan doesn't like interpolated images
+    #     because they don't support log scaling
+    if fres is None:  # unless user tells us not to
+        return out
+    else:
+        interp = interp2d(out.times.value, frequencies, out.value.T,
+                          kind='cubic')
+        f2 = numpy.arange(planes.frange[0], planes.frange[1], fres)
+        new = Spectrogram(interp(out.times.value, f2 + fres/2.).T,
+                          x0=outseg[0], dx=tres,
+                          f0=planes.frange[0], df=fres)
+        new.q = peakq
+        return new
+
+
+    #Performing q-transform on tile with largest normalised tile energy 
+    #final_q = qtransform(h1, max_norm_energy[1][1], max_norm_energy[1][0], sampling, normalized)
+
+    #Plot spectrogram of result
+    #pl.figure()
+    #Pxx, freqs, bins, im = specgram(final_q)
+    #pl.savefig('%s/run_%s/qplot.png' % (out_dir, now))
+    #pl.close()
+    
 
 def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
     """
     Parameters
     """
+
     deltam = deltam_f(mismatch)
     qrange = (float(qrange[0]), float(qrange[1]))
     frange = [float(frange[0]), float(frange[1])]
@@ -75,25 +151,7 @@ def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
         qplane_tiles_list = list(map(tuple,qtiles_array))
         qplane_tile_dict[q] = qplane_tiles_list 
 
-    #perform q-transform on each tile for each q-plane and pick out the tile that has the largest normalized energy 
-    #store q-transforms of each tile in a dict
-    qplane_qtrans_dict = {}
- 
-    for i, key in enumerate(qplane_tile_dict):
-        print key
-        norm_energies_lst=[]
-        for tile in qplane_tile_dict[key]:
-            norm_energies = qtransform(h1, tile[1], tile[0], sampling, normalized)
-            norm_energies_lst.append(norm_energies)
-            if i == 0:
-                max_norm_energy = max(norm_energies)
-            elif max(norm_energies) > max_norm_energy:
-                max_norm_energy = max(norm_energies)
-
-        qplane_qtrans_dict[key] = np.array(norm_energies_lst)
-    print max_norm_energy
-    sys.exit() 
-
+    return qplane_tile_dict
 
 def deltam_f(mismatch):
     """Fractional mismatch between neighbouring tiles
@@ -153,7 +211,6 @@ def qtransform(data, Q, f0, sampling, normalized):
     #Initialize parameters
     qprime = Q / 11**(1/2.) # ... self.qprime
     dur = int(len(data)) / sampling # length of your data chunk in seconds ... self.duration
-    print 'starting pycbc fft ...'
     fseries = TimeSeries.to_frequencyseries(data)
       
     #Window fft
@@ -167,12 +224,10 @@ def qtransform(data, Q, f0, sampling, normalized):
 
     # pad data, move negative frequencies to the end, and IFFT
     padded = np.pad(windowed, padding(window_size, dur, f0, Q), mode='constant')
-    print 'starting numpy ifftshift'
     wenergy = npfft.ifftshift(padded)
 
     # return a `TimeSeries`
     wenergy = FrequencySeries(wenergy, delta_f=sampling)
-    print 'doing pycbc ifft'
     tdenergy = FrequencySeries.to_timeseries(wenergy)
     cenergy = TimeSeries(tdenergy,
                          delta_t=1, copy=False) # Normally delta_t is dur/tdenergy.size ... must figure out better way of doing this
@@ -287,16 +342,8 @@ def main():
     #perform Q-tiling
     Qbase = qtiling(h1, qrange, frange, sampling, normalized, mismatch)
 
-    #FOR DIAGNOSTIC PURPOSES ONLY
-    #pl.figure()
-    #numpy_hist, bins = np.histogram(q, bins=100, density=True)
-    #width = (bins[1] - bins[0])
-    #center = (bins[:-1] + bins[1:]) / 2
-    #pl.bar(center, numpy_hist, log=True, label='normalised energies', color='r', alpha=0.4, align='center', width=width)
-    #pl.legend(frameon=True)
-    #pl.savefig('%s/run_%s/energies_hist.png' % (out_dir,now))
-    #pl.close()
- 
+    #Choose Q-plane and plot
+    Qplane(Qbase, h1, sampling, normalized, out_dir, now)
 
 if __name__ == '__main__':
     main()
