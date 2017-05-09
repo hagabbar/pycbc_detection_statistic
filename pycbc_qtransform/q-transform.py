@@ -36,6 +36,7 @@ from pycbc.frame import read_frame
 from pycbc.filter import highpass_fir, matched_filter
 from pycbc.waveform import get_fd_waveform
 from pycbc.psd import welch, interpolate
+from pycbc.fft import ifft
 import urllib
 import datetime
 from scipy.signal import tukey
@@ -57,8 +58,6 @@ def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
     qrange = (float(qrange[0]), float(qrange[1]))
     frange = [float(frange[0]), float(frange[1])]
     dur = int(len(h1)) / sampling # length of your data chunk in seconds ... self.duration
-    print dur
-    sys.exit()
     qplane_tile_dict = {}
 
     qs = list(_iter_qs(qrange, deltam))
@@ -154,6 +153,7 @@ def qtransform(data, Q, f0, sampling, normalized):
     #Initialize parameters
     qprime = Q / 11**(1/2.) # ... self.qprime
     dur = int(len(data)) / sampling # length of your data chunk in seconds ... self.duration
+    print 'starting pycbc fft ...'
     fseries = TimeSeries.to_frequencyseries(data)
       
     #Window fft
@@ -167,10 +167,13 @@ def qtransform(data, Q, f0, sampling, normalized):
 
     # pad data, move negative frequencies to the end, and IFFT
     padded = np.pad(windowed, padding(window_size, dur, f0, Q), mode='constant')
+    print 'starting numpy ifftshift'
     wenergy = npfft.ifftshift(padded)
 
     # return a `TimeSeries`
-    tdenergy = npfft.ifft(wenergy)
+    wenergy = FrequencySeries(wenergy, delta_f=sampling)
+    print 'doing pycbc ifft'
+    tdenergy = FrequencySeries.to_timeseries(wenergy)
     cenergy = TimeSeries(tdenergy,
                          delta_t=1, copy=False) # Normally delta_t is dur/tdenergy.size ... must figure out better way of doing this
     if normalized:
