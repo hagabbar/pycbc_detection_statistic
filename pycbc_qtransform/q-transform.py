@@ -66,9 +66,9 @@ def plotter(qplane, out_dir, now, frange, h1, sampling):
     dur = int(len(h1)) / sampling #duration of analysis period in seconds
 
     # generate 2 2d grids for the x & y bounds
-    y, x = np.mgrid[slice(frange[0], frange[1], dy), # Should replace zero/dur with start/end times
+    y, x = np.mgrid[slice(int(frange[0]), int(frange[1]), dy), # Should replace zero/dur with start/end times
                     slice(0, dur, dx)]
-    z = qplane.T
+    z = qplane
 
     # x and y are bounds, so z should be the value *inside* those bounds.
     # Therefore, remove the last value from the z array.
