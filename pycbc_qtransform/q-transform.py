@@ -62,7 +62,7 @@ def plotter(qplane, out_dir, now, frange, h1, sampling):
     # plot a spectrogram of the q-plane with the loudest normalized tile energy
 
     dx = 0.001 #time resolution 
-    dy = 0.1 #frequency resolution
+    dy = 1 #frequency resolution
     dur = int(len(h1)) / sampling #duration of analysis period in seconds
 
     # generate 2 2d grids for the x & y bounds
@@ -72,27 +72,24 @@ def plotter(qplane, out_dir, now, frange, h1, sampling):
 
     # x and y are bounds, so z should be the value *inside* those bounds.
     # Therefore, remove the last value from the z array.
-    #z = z[:-1, :-1]
     levels = MaxNLocator(nbins=15).tick_values(z.min(), z.max())
-
 
     # pick the desired colormap, sensible levels, and define a normalization
     # instance which takes data values and translates those into levels.
     cmap = plt.get_cmap('PiYG')
     norm = BoundaryNorm(levels, ncolors=cmap.N, clip=True)
 
-    fig, (ax0, ax1) = plt.subplots(nrows=2)
+    fig, ax0 = plt.subplots()
 
     im = ax0.pcolormesh(x, y, z, cmap=cmap, norm=norm)
     fig.colorbar(im, ax=ax0)
     ax0.set_title('pcolormesh with levels')
 
-
     # adjust spacing between subplots so `ax1` title and `ax0` tick labels
     # don't overlap
     fig.tight_layout()
 
-    plt.show()
+    plt.savefig('%s/run_%s/spec.png' % (out_dir,now))
 
 def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
     """
@@ -103,7 +100,7 @@ def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
     # store q-transforms of each tile in a dict
     qplane_qtrans_dict = {}
     tres=.001
-    fres = .1
+    fres = 1
     dur = int(len(h1)) / sampling
 
     max_norm_energy = [] 
@@ -136,8 +133,8 @@ def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
     
     #create time array
     time_array = np.zeros(int(dur / tres))
-    #for idx, i in enumerate(time_array): 
-    #    time_array[idx] = idx
+    for idx, i in enumerate(time_array): 
+        time_array[idx] = idx
 
     # interpolate rows for better time resolution
     interp_norm = []
@@ -162,13 +159,14 @@ def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
         for idx, i in enumerate(qplane_tile_dict[max_norm_energy[2]]):
             frequencies.append(i[0])
 
-        # 2-D interpolation 
+        # 2-D interpolation
         interp = interp2d(time_array, frequencies, interp_norm,
                           kind='cubic')
         f2 = np.arange(int(frange[0]), int(frange[1]), fres)
 
         # this is the last part you need to fix
-        out = interp(time_null_array, f2)
+        out = interp(time_array, f2)
+        
     return out 
 
 def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
@@ -377,8 +375,8 @@ def main():
     url = "https://losc.ligo.org/s/events/GW150914/" + fname
     urllib.urlretrieve(url, filename=fname)
     h1 = read_frame('H-H1_LOSC_4_V2-1126259446-32.gwf', 'H1:LOSC-STRAIN')
-    h1 = TimeSeries(np.random.normal(size=64*4096), delta_t = 1. / sampling)
-    h1 = highpass_fir(h1, 15, 8)
+    #h1 = TimeSeries(np.random.normal(size=64*4096), delta_t = 1. / sampling)
+    #h1 = highpass_fir(h1, 15, 8)
 
     # Calculate the noise spectrum
     psd = interpolate(welch(h1), 1.0 / 32)
@@ -391,6 +389,8 @@ def main():
 
     #Plot spectrogram
     plotter(qplane, out_dir, now, frange, h1, sampling)
+
+    print 'Done!'
 
 if __name__ == '__main__':
     main()
