@@ -1,5 +1,4 @@
 # Copyright (C) 2017  Hunter A. Gabbard
-# Most of this is a port of Duncan Macleod's GWPY qtransform.py script
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -43,6 +42,7 @@ from scipy.interpolate import (interp2d, InterpolatedUnivariateSpline)
 from numpy import fft as npfft
 import argparse
 import datetime
+import scipy
 
 from matplotlib import use
 use('Agg')
@@ -54,7 +54,8 @@ from matplotlib.pyplot import specgram
 __author__ = 'Hunter Gabbard <hunter.gabbard@ligo.org>'
 __credits__ = 'Duncan Macleod <duncan.macleod@ligo.org>'
 
-def plotter(qplane, out_dir, now, frange, h1, sampling):
+
+def plotter_test(qplane, out_dir, now, frange, h1, sampling):
     """
     Parameters
     """
@@ -91,6 +92,44 @@ def plotter(qplane, out_dir, now, frange, h1, sampling):
 
     plt.savefig('%s/run_%s/spec.png' % (out_dir,now))
 
+
+def plotter(qplane, out_dir, now, frange, h1, sampling):
+    """
+    Parameters
+    """
+
+    # plot a spectrogram of the q-plane with the loudest normalized tile energy
+
+    dx = 0.001 #time resolution 
+    dy = 0.1 #frequency resolution
+    dur = int(len(h1)) / sampling #duration of analysis period in seconds
+
+    # generate 2 2d grids for the x & y bounds
+    y, x = np.mgrid[slice(int(frange[0]), int(frange[1]), dy), # Should replace zero/dur with start/end times
+                    slice(-dur / 2, dur / 2, dx)]
+    z = qplane
+
+    # x and y are bounds, so z should be the value *inside* those bounds.
+    # Therefore, remove the last value from the z array.
+    levels = MaxNLocator(nbins=15).tick_values(z.min(), z.max())
+
+    # pick the desired colormap, sensible levels, and define a normalization
+    # instance which takes data values and translates those into levels.
+    cmap = plt.get_cmap('plasma') #PiYG
+    norm = BoundaryNorm(levels, ncolors=cmap.N, clip=True)
+
+    fig, ax0 = plt.subplots()
+
+    im = ax0.pcolormesh(x, y, z, cmap=cmap, norm=norm)
+    fig.colorbar(im, ax=ax0)
+    ax0.set_title('pcolormesh with levels')
+
+    # adjust spacing between subplots so `ax1` title and `ax0` tick labels
+    # don't overlap
+    fig.tight_layout()
+
+    plt.savefig('%s/run_%s/spec.png' % (out_dir,now))
+
 def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
     """
     Parameters
@@ -100,7 +139,7 @@ def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
     # store q-transforms of each tile in a dict
     qplane_qtrans_dict = {}
     tres=.001
-    fres = 1
+    fres = 0.1
     dur = int(len(h1)) / sampling
 
     max_norm_energy = [] 
@@ -132,34 +171,41 @@ def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
     norm = qplane_qtrans_dict[max_norm_energy[2]]     
     
     #create time array
-    time_array = np.zeros(int(dur / tres))
-    for idx, i in enumerate(time_array): 
-        time_array[idx] = idx
+    #time_array = np.zeros(int(dur / tres))
+    #for idx, i in enumerate(time_array): 
+    #    time_array[idx] = idx
 
     # interpolate rows for better time resolution
     interp_norm = []
     for i, row in enumerate(norm):
-        row_arry = np.zeros(len(row))
-        for idx, i in enumerate(row_arry): 
-            row_arry[idx] = idx
-        interp = InterpolatedUnivariateSpline(row_arry, row)
+        #row_arry = np.zeros(len(row))
+        #for idx, j in enumerate(row_arry): 
+        #    row_arry[idx] = idx
+        time_array = np.linspace(0,len(row),int(dur / tres))
+        row_arry = np.linspace(0,len(row),len(row))
+        interp = InterpolatedUnivariateSpline(row_arry, row) #Originally used this function: InterpolatedUnivariateSpline
         interp_norm.append(interp(time_array))
-
+        #plt.figure(i)
+        #plt.plot(interp(time_array))
+        #plt.savefig('test/plot_%s.png' % (i))
+        #plt.close()
 
     # then interpolate the spectrogram to increase the frequency resolution
     if fres is None:  # unless user tells us not to
         return inter_norm
     else:
         # initialize some variables
-        time_array = np.zeros(int(dur / tres))
-        for idx, i in enumerate(time_array): 
-            time_array[idx] = idx
+        #time_array = np.zeros(int(dur / tres))
+        #for idx, i in enumerate(time_array): 
+        #    time_array[idx] = idx
+        time_array = np.linspace(-int(dur / tres),int(dur / tres),int(dur / tres))
         time_null_array = np.zeros(int(dur / tres))
         frequencies = []
         for idx, i in enumerate(qplane_tile_dict[max_norm_energy[2]]):
             frequencies.append(i[0])
 
         # 2-D interpolation
+        time_array = np.linspace(0,int(dur / tres),int(dur / tres))
         interp = interp2d(time_array, frequencies, interp_norm,
                           kind='cubic')
         f2 = np.arange(int(frange[0]), int(frange[1]), fres)
@@ -261,7 +307,7 @@ def qtransform(data, Q, f0, sampling, normalized):
     window_size = 2 * int(f0 / qprime * dur) + 1
         
     #Get indices
-    indices = _get_indices(dur)
+    indices = _get_indices(window_size)
 
     #Apply window to fft
     windowed = fseries[get_data_indices(dur, f0, indices)] * get_window(dur, indices, f0, qprime, Q, sampling)
@@ -291,7 +337,7 @@ def padding(window_size, dur, f0, Q):
         :type: `tuple` of `int`
         """
         pad = n_tiles(dur,f0,Q) - window_size
-        return (int((pad - 1)/2.), int((pad + 1)/2.))
+        return (int((pad - 5)/2.), int((pad + 5)/2.))
 
 def get_data_indices(dur, f0, indices):
     """Returns the index array of interesting frequencies for this row
@@ -299,8 +345,9 @@ def get_data_indices(dur, f0, indices):
     return np.round(indices + 1 +
                        f0 * dur).astype(int)
 
-def _get_indices(dur):
-    half = int((int(dur) - 1.) / 2.) 
+def _get_indices(window_size):
+
+    half = int((int(window_size) - 1.) / 2.) 
     return np.arange(-half, half + 1)
 
 def get_window(dur, indices, f0, qprime, Q, sampling):
@@ -356,6 +403,10 @@ def main():
         help="normalize the energy of the output")
     ap.add_argument("-s", "--samp-freq", required=True, type=float,
         help="Sampling frequency of channel")
+    ap.add_argument("-f", "--freq-res", required=False, type=float,
+        default=0.1, help="frequency resolution")
+    ap.add_argument("-t", "--t-res", required=False, type=float,
+        default=0.001, help="time resolution")
 
     args = ap.parse_args()
 
@@ -363,7 +414,7 @@ def main():
     #Initialize parameters
     out_dir = args.output_dir
     now = args.usertag
-    #os.makedirs('%s/run_%s' % (out_dir,now))  # Fail early if the dir already exists
+    os.makedirs('%s/run_%s' % (out_dir,now))  # Fail early if the dir already exists
     normalized = args.normalize # Set this as needed
     sampling = args.samp_freq #sampling frequency
     mismatch=.2
@@ -376,10 +427,50 @@ def main():
     urllib.urlretrieve(url, filename=fname)
     h1 = read_frame('H-H1_LOSC_4_V2-1126259446-32.gwf', 'H1:LOSC-STRAIN')
     #h1 = TimeSeries(np.random.normal(size=64*4096), delta_t = 1. / sampling)
-    #h1 = highpass_fir(h1, 15, 8)
+    h1 = highpass_fir(h1, 15, 8)
 
     # Calculate the noise spectrum
     psd = interpolate(welch(h1), 1.0 / 32)
+
+    # Diagnostic q-transform test
+    #import scipy
+    #h1 = TimeSeries(scipy.signal.gausspulse(np.linspace(-8.,8.,16*sampling)), delta_t = 1. / sampling)
+
+    """
+    #h1 = qtransform(h1, 20, 50, sampling, normalized)
+    t = np.linspace(0,64,64)
+    f = np.linspace(0,64,64)
+    dt = 1
+    df = 1
+    y, x = np.mgrid[slice(f.min(), f.max(), df), slice(t.min(), t.max(), dt)]
+    def e_func(t, f):
+        return np.exp(-0.1*(t-32)**2 - 0.1*(f-32)**2)
+    z = e_func(y, x)
+
+    # x and y are bounds, so z should be the value *inside* those bounds.
+    # Therefore, remove the last value from the z array.
+    levels = MaxNLocator(nbins=15).tick_values(z.min(), z.max())
+
+    # pick the desired colormap, sensible levels, and define a normalization
+    # instance which takes data values and translates those into levels.
+    cmap = plt.get_cmap('PiYG')
+    norm = BoundaryNorm(levels, ncolors=cmap.N, clip=True)
+
+    fig, ax0 = plt.subplots()
+
+    im = ax0.pcolormesh(x, y, z, cmap=cmap, norm=norm)
+    fig.colorbar(im, ax=ax0)
+    ax0.set_title('pcolormesh with levels')
+
+    # adjust spacing between subplots so `ax1` title and `ax0` tick labels
+    # don't overlap
+    #fig.tight_layout()
+
+
+    plt.savefig('/Users/hugabb/pycbc_detection_statistic/pycbc_qtransform/plotter_test.png')
+    plt.close()
+    sys.exit()
+    """
 
     #perform Q-tiling
     Qbase, frange = qtiling(h1, qrange, frange, sampling, normalized, mismatch)
