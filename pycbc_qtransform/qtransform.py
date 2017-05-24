@@ -37,7 +37,7 @@ from pycbc.frame import read_frame
 from pycbc.filter import highpass_fir, matched_filter
 from pycbc.waveform import get_fd_waveform
 from pycbc.psd import welch, interpolate
-from pycbc.fft import fft, ifft
+from pycbc.fft import ifft
 import urllib
 import datetime
 from scipy.interpolate import (interp2d, InterpolatedUnivariateSpline)
@@ -225,7 +225,7 @@ def _iter_frequencies(q, frange, mismatch, dur):
     fcum_mismatch = log(maxf / minf) * (2 + q**2)**(1/2.) / 2.
     nfreq = int(max(1, ceil(fcum_mismatch / deltam_f(mismatch))))
     fstep = fcum_mismatch / nfreq
-    fstepmin = 1 / dur
+    fstepmin = 1. / dur
     # for each frequency, yield a QTile
     for i in xrange(nfreq):
         yield (minf *
@@ -279,7 +279,7 @@ def qtransform(data, Q, f0, sampling, normalized):
     wenergy = FrequencySeries(wenergy, delta_f=1./dur)
     tdenergy = TimeSeries(zeros(output_samples, dtype=np.complex128),
                             delta_t=1./output_sampling)
-    fft(wenergy, tdenergy)
+    ifft(wenergy, tdenergy)
     cenergy = TimeSeries(tdenergy,
                          delta_t=tdenergy.delta_t, copy=False) # Normally delta_t is dur/tdenergy.size ... must figure out better way of doing this
     if normalized:
