@@ -1,5 +1,4 @@
 # Copyright (C) 2017  Hunter A. Gabbard
-# Most of this is a port of Duncan Macleod's GWPY qtransform.py script
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -52,50 +51,42 @@ from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
 from matplotlib.pyplot import specgram
 
-__author__ = 'Hunter Gabbard <hunter.gabbard@ligo.org>'
+__author__ = 'Hunter Gabbard <hunter.gabbard@ligo.org>, Andrew Lundgren <andrew.lundgren@aei.mpg.de'
 __credits__ = 'Duncan Macleod <duncan.macleod@ligo.org>'
 
-def plotter(qplane, out_dir, now, frange, h1, sampling, dx, dy):
+def plotter(interp, out_dir, now, frange, h1, sampling, tres, fres):
     """
     Parameters
     """
 
     # plot a spectrogram of the q-plane with the loudest normalized tile energy
+    print 'plotting ...'    
+    # intitialize variables
+    xarr=np.linspace(0, 1, 1. / tres)
+    yarr=np.arange(int(frange[0]), int(frange[1]), fres)
+    z = interp(xarr,yarr)
 
-    dur = int(len(h1)) / sampling #duration of analysis period in seconds
+    # pick the desired colormap
+    cmap = plt.get_cmap('viridis')
 
-    # generate 2 2d grids for the x & y bounds
-    y, x = np.mgrid[slice(int(frange[0]), int(frange[1]), dy), # Should replace zero/dur with start/end times
-                    slice(-dur / 2, dur / 2, dx)]
-    z = qplane
+    fig = plt.plot()
 
-    # x and y are bounds, so z should be the value *inside* those bounds.
-    # Therefore, remove the last value from the z array.
-    levels = MaxNLocator(nbins=15).tick_values(z.min(), z.max())
-
-    # pick the desired colormap, sensible levels, and define a normalization
-    # instance which takes data values and translates those into levels.
-    cmap = plt.get_cmap('plasma') #PiYG
-    norm = BoundaryNorm(levels, ncolors=cmap.N, clip=True)
-
-    fig, ax0 = plt.subplots()
-
-    im = ax0.pcolormesh(x, y, z, cmap=cmap, norm=norm)
-    fig.colorbar(im, ax=ax0)
-    ax0.set_title('pcolormesh with levels')
-
-    # adjust spacing between subplots so `ax1` title and `ax0` tick labels
-    # don't overlap
-    fig.tight_layout()
+    p1 = plt.pcolormesh(xarr,
+                        yarr,
+                        z, cmap=cmap, norm=None)
+    plt.colorbar(p1)
+    plt.title('Pycbc q-transform')
 
     plt.savefig('%s/run_%s/spec.png' % (out_dir,now))
+
+    return plt
+
 
 def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange, tres, fres):
     """
     Parameters
     """
-
-    # perform q-transform on each tile for each q-plane and pick out the tile that has the largest normalized energy 
+    # perform q-transform on each tile for each q-plane and pick out tile with largest normalized energy
     # store q-transforms of each tile in a dict
     qplane_qtrans_dict = {}
     dur = int(len(h1)) / sampling
@@ -118,60 +109,28 @@ def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange, tre
                 max_norm_energy[3] = norm_energies
         qplane_qtrans_dict[key] = np.array(norm_energies_lst)
 
-    # build regular Spectrogram from peak-Q data by interpolating each
-    # if you get lost, refer to https://github.com/gwpy/gwpy/blob/44d8d6381d2d03fb5d0b7d5484885512f9b841b1/gwpy/timeseries/timeseries.py
-    # line 1780
-    # (Q, frequency) `TimeSeries` to have the same time resolution
-
-
     # record peak q calculate above and q-transform output for peak q
     peakq = max_norm_energy[1][1]
-    norm = qplane_qtrans_dict[max_norm_energy[2]]
-
-    #create time array
-    #time_array = np.zeros(int(dur / tres))
-    #for idx, i in enumerate(time_array): 
-    #    time_array[idx] = idx
-
-    # interpolate rows for better time resolution
-    interp_norm = []
-    for i, row in enumerate(norm):
-        #row_arry = np.zeros(len(row))
-        #for idx, j in enumerate(row_arry): 
-        #    row_arry[idx] = idx
-        time_array = np.linspace(0,len(row),int(dur / tres))
-        row_arry = np.linspace(0,len(row),len(row))
-        interp = InterpolatedUnivariateSpline(row_arry, row) #Originally used this function: InterpolatedUnivariateSpline
-        interp_norm.append(interp(time_array))
-        #plt.figure(i)
-        #plt.plot(interp(time_array))
-        #plt.savefig('test/plot_%s.png' % (i))
-        #plt.close()
+    result = qplane_qtrans_dict[max_norm_energy[2]]
 
     # then interpolate the spectrogram to increase the frequency resolution
     if fres is None:  # unless user tells us not to
-        return inter_norm
+        return result
     else:
         # initialize some variables
-        #time_array = np.zeros(int(dur / tres))
-        #for idx, i in enumerate(time_array): 
-        #    time_array[idx] = idx
-        time_array = np.linspace(-int(dur / tres),int(dur / tres),int(dur / tres))
-        time_null_array = np.zeros(int(dur / tres))
         frequencies = []
+
         for idx, i in enumerate(qplane_tile_dict[max_norm_energy[2]]):
             frequencies.append(i[0])
 
         # 2-D interpolation
-        time_array = np.linspace(0,int(dur / tres),int(dur / tres))
-        interp = interp2d(time_array, frequencies, interp_norm,
-                          kind='cubic')
-        f2 = np.arange(int(frange[0]), int(frange[1]), fres)
+        time_array = np.linspace(-(dur / 2.),(dur / 2.),int(dur * sampling))
+        interp = interp2d(time_array, frequencies, result)
 
-        # this is the last part you need to fix
-        out = interp(time_array, f2)
+    out = interp(np.linspace(0, 1, 1. / tres), np.arange(int(frange[0]), int(frange[1]), fres))
 
-    return out
+    return out, interp
+
 
 def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
     """
@@ -290,7 +249,7 @@ def qtransform(data, Q, f0, sampling, normalized):
         energy = type(cenergy)(
             cenergy.real() ** 2. + cenergy.imag() ** 2.,
             delta_t=1, copy=False)
-        medianenergy = energy.numpy().median()
+        medianenergy = energy.numpy().mean()
         result = energy / medianenergy
     else:
         result = cenergy
@@ -368,6 +327,10 @@ def main():
         default=0.1, help="frequency resolution")
     ap.add_argument("-t", "--t-res", required=False, type=float,
         default=0.001, help="time resolution")
+    ap.add_argument("--f-start", required=False, type=float,
+        help="plot start frequency")
+    ap.add_argument("--f-end", required=False, type=float,
+        help="plot end frequency")
 
     args = ap.parse_args()
 
@@ -375,7 +338,7 @@ def main():
     #Initialize parameters
     out_dir = args.output_dir
     now = args.usertag
-    #os.makedirs('%s/run_%s' % (out_dir,now))  # Fail early if the dir already exists
+    os.makedirs('%s/run_%s' % (out_dir,now))  # Fail early if the dir already exists
     normalized = args.normalize # Set this as needed
     sampling = args.samp_freq #sampling frequency
     mismatch=.2
@@ -389,20 +352,24 @@ def main():
     url = "https://losc.ligo.org/s/events/GW150914/" + fname
     urllib.urlretrieve(url, filename=fname)
     h1 = read_frame('H-H1_LOSC_4_V2-1126259446-32.gwf', 'H1:LOSC-STRAIN')
-    #h1 = TimeSeries(np.random.normal(size=64*4096), delta_t = 1. / sampling)
-    #h1 = highpass_fir(h1, 15, 8)
-
-    # Calculate the noise spectrum
     psd = interpolate(welch(h1), 1.0 / 32)
+    #h1 = TimeSeries(np.random.normal(size=64*4096), delta_t = 1. / sampling)
+    h1 = highpass_fir(h1, 15, 8)
+    white_strain = (h1.to_frequencyseries() / psd ** 0.5 * psd.delta_f).to_timeseries()
+    h1 = white_strain
 
     #perform Q-tiling
     Qbase, frange = qtiling(h1, qrange, frange, sampling, normalized, mismatch)
 
     #Choose Q-plane and plot
-    qplane = Qplane(Qbase, h1, sampling, normalized, out_dir, now, frange, tres, fres)
+    qplane, interp_func = Qplane(Qbase, h1, sampling, normalized, out_dir, now, frange, tres, fres)
 
     #Plot spectrogram
-    plotter(qplane, out_dir, now, frange, h1, sampling, tres, fres)
+    if args.f_start:
+        frange[0] = args.f_start
+    if args.f_end:
+        frange[1] = args.f_end
+    plotter(interp_func, out_dir, now, frange, h1, sampling, tres, fres)
 
     print 'Done!'
 
