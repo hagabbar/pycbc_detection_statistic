@@ -55,20 +55,18 @@ from matplotlib.pyplot import specgram
 __author__ = 'Hunter Gabbard <hunter.gabbard@ligo.org>'
 __credits__ = 'Duncan Macleod <duncan.macleod@ligo.org>'
 
-def plotter(qplane, out_dir, now, frange, h1, sampling):
+def plotter(qplane, out_dir, now, frange, h1, sampling, dx, dy):
     """
     Parameters
     """
 
     # plot a spectrogram of the q-plane with the loudest normalized tile energy
 
-    dx = 0.001 #time resolution 
-    dy = 1 #frequency resolution
     dur = int(len(h1)) / sampling #duration of analysis period in seconds
 
     # generate 2 2d grids for the x & y bounds
     y, x = np.mgrid[slice(int(frange[0]), int(frange[1]), dy), # Should replace zero/dur with start/end times
-                    slice(0, dur, dx)]
+                    slice(-dur / 2, dur / 2, dx)]
     z = qplane
 
     # x and y are bounds, so z should be the value *inside* those bounds.
@@ -77,7 +75,7 @@ def plotter(qplane, out_dir, now, frange, h1, sampling):
 
     # pick the desired colormap, sensible levels, and define a normalization
     # instance which takes data values and translates those into levels.
-    cmap = plt.get_cmap('PiYG')
+    cmap = plt.get_cmap('plasma') #PiYG
     norm = BoundaryNorm(levels, ncolors=cmap.N, clip=True)
 
     fig, ax0 = plt.subplots()
@@ -92,7 +90,7 @@ def plotter(qplane, out_dir, now, frange, h1, sampling):
 
     plt.savefig('%s/run_%s/spec.png' % (out_dir,now))
 
-def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
+def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange, tres, fres):
     """
     Parameters
     """
@@ -100,11 +98,9 @@ def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
     # perform q-transform on each tile for each q-plane and pick out the tile that has the largest normalized energy 
     # store q-transforms of each tile in a dict
     qplane_qtrans_dict = {}
-    tres=.001
-    fres = 1
     dur = int(len(h1)) / sampling
 
-    max_norm_energy = [] 
+    max_norm_energy = []
     for i, key in enumerate(qplane_tile_dict):
         print key
         norm_energies_lst=[]
@@ -130,45 +126,52 @@ def Qplane(qplane_tile_dict, h1, sampling, normalized, out_dir, now, frange):
 
     # record peak q calculate above and q-transform output for peak q
     peakq = max_norm_energy[1][1]
-    norm = qplane_qtrans_dict[max_norm_energy[2]]     
-    
+    norm = qplane_qtrans_dict[max_norm_energy[2]]
+
     #create time array
-    time_array = np.zeros(int(dur / tres))
-    for idx, i in enumerate(time_array): 
-        time_array[idx] = idx
+    #time_array = np.zeros(int(dur / tres))
+    #for idx, i in enumerate(time_array): 
+    #    time_array[idx] = idx
 
     # interpolate rows for better time resolution
     interp_norm = []
     for i, row in enumerate(norm):
-        row_arry = np.zeros(len(row))
-        for idx, i in enumerate(row_arry): 
-            row_arry[idx] = idx
-        interp = InterpolatedUnivariateSpline(row_arry, row)
+        #row_arry = np.zeros(len(row))
+        #for idx, j in enumerate(row_arry): 
+        #    row_arry[idx] = idx
+        time_array = np.linspace(0,len(row),int(dur / tres))
+        row_arry = np.linspace(0,len(row),len(row))
+        interp = InterpolatedUnivariateSpline(row_arry, row) #Originally used this function: InterpolatedUnivariateSpline
         interp_norm.append(interp(time_array))
-
+        #plt.figure(i)
+        #plt.plot(interp(time_array))
+        #plt.savefig('test/plot_%s.png' % (i))
+        #plt.close()
 
     # then interpolate the spectrogram to increase the frequency resolution
     if fres is None:  # unless user tells us not to
         return inter_norm
     else:
         # initialize some variables
-        time_array = np.zeros(int(dur / tres))
-        for idx, i in enumerate(time_array): 
-            time_array[idx] = idx
+        #time_array = np.zeros(int(dur / tres))
+        #for idx, i in enumerate(time_array): 
+        #    time_array[idx] = idx
+        time_array = np.linspace(-int(dur / tres),int(dur / tres),int(dur / tres))
         time_null_array = np.zeros(int(dur / tres))
         frequencies = []
         for idx, i in enumerate(qplane_tile_dict[max_norm_energy[2]]):
             frequencies.append(i[0])
 
         # 2-D interpolation
+        time_array = np.linspace(0,int(dur / tres),int(dur / tres))
         interp = interp2d(time_array, frequencies, interp_norm,
                           kind='cubic')
         f2 = np.arange(int(frange[0]), int(frange[1]), fres)
 
         # this is the last part you need to fix
         out = interp(time_array, f2)
-        
-    return out 
+
+    return out
 
 def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
     """
@@ -194,9 +197,10 @@ def qtiling(h1, qrange, frange, sampling, normalized, mismatch):
         qlst.fill(q)
         qtiles_array = np.vstack((qtilefreq,qlst)).T
         qplane_tiles_list = list(map(tuple,qtiles_array))
-        qplane_tile_dict[q] = qplane_tiles_list 
+        qplane_tile_dict[q] = qplane_tiles_list
 
     return qplane_tile_dict, frange
+
 
 def deltam_f(mismatch):
     """Fractional mismatch between neighbouring tiles
@@ -286,8 +290,8 @@ def qtransform(data, Q, f0, sampling, normalized):
         energy = type(cenergy)(
             cenergy.real() ** 2. + cenergy.imag() ** 2.,
             delta_t=1, copy=False)
-        meanenergy = energy.numpy().mean()
-        result = energy / meanenergy
+        medianenergy = energy.numpy().median()
+        result = energy / medianenergy
     else:
         result = cenergy
    
@@ -360,6 +364,10 @@ def main():
         help="normalize the energy of the output")
     ap.add_argument("-s", "--samp-freq", required=True, type=float,
         help="Sampling frequency of channel")
+    ap.add_argument("-f", "--freq-res", required=False, type=float,
+        default=0.1, help="frequency resolution")
+    ap.add_argument("-t", "--t-res", required=False, type=float,
+        default=0.001, help="time resolution")
 
     args = ap.parse_args()
 
@@ -373,6 +381,8 @@ def main():
     mismatch=.2
     qrange=(4,64)
     frange=(0,np.inf)
+    tres = args.t_res
+    fres = args.freq_res
 
     # Read data and remove low frequency content
     fname = 'H-H1_LOSC_4_V2-1126259446-32.gwf'
@@ -389,10 +399,10 @@ def main():
     Qbase, frange = qtiling(h1, qrange, frange, sampling, normalized, mismatch)
 
     #Choose Q-plane and plot
-    qplane = Qplane(Qbase, h1, sampling, normalized, out_dir, now, frange)
+    qplane = Qplane(Qbase, h1, sampling, normalized, out_dir, now, frange, tres, fres)
 
     #Plot spectrogram
-    plotter(qplane, out_dir, now, frange, h1, sampling)
+    plotter(qplane, out_dir, now, frange, h1, sampling, tres, fres)
 
     print 'Done!'
 
