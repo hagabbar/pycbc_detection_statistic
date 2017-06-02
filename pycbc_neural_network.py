@@ -665,7 +665,7 @@ def main():
     bg_trig, inj_trig, comb_all = normalize(comb_all, pre_proc_log, bg_trig.shape[0])
     print bg_trig.shape
 
-#Need bg indices for next function. Work that in...
+    #Need bg indices for next function. Work that in...
 
     #Separating into training/testing sets
     train_data, test_data, back_test, inj_test, inj_w_test, inj_w_train, train_times, test_times = \
