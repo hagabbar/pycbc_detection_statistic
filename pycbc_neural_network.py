@@ -627,7 +627,7 @@ def main():
         help="label for given run")
     ap.add_argument("-r", "--run-number", type=int, required=False, default=0,
         help="If performing multiple runs on same machine, specify a unique number for each run (must be greater than zero)")
-    ap.add_argument("-w", "--weight", required=True, type=str,
+    ap.add_argument("-w", "--weight", required=False, type=str, default='distance',
         help="Choose a sample weighting scheme (e.g. optimal_snr or distance")
     args = ap.parse_args()
 
